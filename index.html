@@ -193,6 +193,9 @@ select.input { -webkit-appearance: none; appearance: none; }
 <div id="modalRoot"></div>
 <script src="jsQR.js"></script>
 <script src="zxing.min.js"></script>
+<script src="pako.min.js"></script>
+<script src="qrcode.js"></script>
+<script src="qrlink.js"></script>
 <script>
 "use strict";
 /* 2点照合ツール（iPad・Android・Windows タブレット・スマホ版）
@@ -202,7 +205,7 @@ select.input { -webkit-appearance: none; appearance: none; }
    出荷リストが古いことがあるので、リスト外・品番違い・数量オーバーは止めずに「注意」として記録する。
    記録は端末の中（localStorage）にだけ保存し、ネットには送らない。CSV でパソコンへ渡す。 */
 
-var APP_VERSION = "1.0.6";
+var APP_VERSION = "1.0.7";
 var IS_ANDROID = /Android/i.test(navigator.userAgent);
 var IS_WINDOWS = /Windows/i.test(navigator.userAgent);
 var LS_SET = "niten.settings.v1";
@@ -1191,6 +1194,149 @@ function importListFile() {
     });
   });
 }
+/* ---------------- QRで受け渡し（パソコン用_QR受け渡し.html とやり取り。iPod touch 版と同じ形） ---------------- */
+// 出荷リストのQRの中身 → 出荷リスト（S 行＝出荷、M 行＝品番マスタ）
+function listFromQrText(text) {
+  var lines = text.split("\n"), head = lines[0].split("\t");
+  if (head[0] !== "NITEN-LIST") return { error: "出荷リストのデータではありません" };
+  var list = { id: "L" + Date.now().toString(36), name: head[2] || "出荷リスト", loaded: nowText(), rows: [], master: {} }, bad = 0;
+  lines.slice(1).forEach(function (ln) {
+    var c = ln.split("\t");
+    if (c[0] === "M" && c[1]) { list.master[normKey(c[1])] = { hinban: c[1], kishu: c[2] || "", irisu: c[3] || "" }; return; }
+    if (c[0] !== "S") return;
+    var r = { no: c[1] || "", nohin: c[2] || "", noki: c[3] || "", hinban: c[4] || "", hinmei: c[5] || "", qty: toInt(c[6]),
+      kishu: c[7] || "", irisu: c[8] || "", biko: c[9] || "", labels: toInt(c[10]), hasu: c[11] || "" };
+    if (!r.nohin || !(r.qty >= 0)) { bad++; return; }
+    if (!(r.labels >= 0)) r.labels = 0;
+    if (!r.no) r.no = String(list.rows.length + 1);
+    list.rows.push(r);
+  });
+  list.rows.forEach(function (r) {
+    var m = list.master[normKey(r.hinban)];
+    if (m) { if (!r.kishu) r.kishu = m.kishu; if (!r.irisu) r.irisu = m.irisu; }
+  });
+  if (!list.rows.length) return { error: "出荷リストの行がありません" };
+  return { list: list, bad: bad };
+}
+// 記録 → 記録のQRの中身（パソコン側で、記録CSVと同じ列に戻す）
+var REC_FIELDS = ["no", "t", "tanto", "result", "warn", "nohin", "hinban", "qty", "kbRaw", "lbRaw", "cancel", "cancelT", "list", "device", "id"];
+function recordsQrText() {
+  return ["NITEN-REC\t1\t" + (S.device || "端末") + "\t" + nowText()].concat(R.map(function (r) {
+    return "R\t" + REC_FIELDS.map(function (f) { return String(r[f] == null ? "" : r[f]).replace(/[\t\r\n]/g, " "); }).join("\t");
+  })).join("\n");
+}
+// 受け取り画面のカメラ（QRだけを探す）
+var mcam = { stream: null, timer: 0, canvas: null, last: "", lastAt: 0 };
+function startModalCam(onText) {
+  var box = document.getElementById("mcamBox"), msg = document.getElementById("mcamMsg");
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { alert("この画面ではカメラを使えません。スキャナで読んでください。"); return; }
+  box.classList.remove("hidden");
+  msg.textContent = "カメラを準備しています…";
+  navigator.mediaDevices.getUserMedia(cameraConstraints()).then(function (s) {
+    if (!document.getElementById("mcamBox")) { s.getTracks().forEach(function (t) { t.stop(); }); return; }
+    mcam.stream = s;
+    var v = document.getElementById("mcamVideo");
+    v.setAttribute("playsinline", ""); v.muted = true; v.srcObject = s;
+    var p = v.play(); if (p && p.catch) p.catch(function () { });
+    msg.textContent = "パソコンの画面のQRを枠に入れてください";
+    document.getElementById("mcamBtn").textContent = "カメラを止める";
+    mcam.canvas = mcam.canvas || document.createElement("canvas");
+    var loop = function () {
+      if (!mcam.stream) return;
+      try {
+        if (v.readyState >= 2 && v.videoWidth) {
+          var side = Math.min(v.videoWidth, v.videoHeight) * 0.9, sx = (v.videoWidth - side) / 2, sy = (v.videoHeight - side) / 2, size = Math.min(720, Math.round(side));
+          mcam.canvas.width = size; mcam.canvas.height = size;
+          var g = mcam.canvas.getContext("2d", { willReadFrequently: true }) || mcam.canvas.getContext("2d");
+          g.drawImage(v, sx, sy, side, side, 0, 0, size, size);
+          var q = jsQR(g.getImageData(0, 0, size, size).data, size, size, { inversionAttempts: "dontInvert" });
+          if (q && q.data) {
+            var now = Date.now();
+            if (q.data !== mcam.last || now - mcam.lastAt > 2500) { mcam.last = q.data; onText(q.data); }
+            mcam.lastAt = now;
+          }
+        }
+      } catch (e) { }
+      mcam.timer = setTimeout(loop, 120);
+    };
+    mcam.timer = setTimeout(loop, 300);
+  }).catch(function (e) {
+    box.classList.add("hidden");
+    alert("カメラを使えませんでした（" + (e && e.name ? e.name : e) + "）。スキャナで読んでください。");
+  });
+}
+function stopModalCam() {
+  clearTimeout(mcam.timer); mcam.timer = 0;
+  if (mcam.stream) mcam.stream.getTracks().forEach(function (t) { t.stop(); });
+  mcam.stream = null; mcam.last = "";
+  var box = document.getElementById("mcamBox"), b = document.getElementById("mcamBtn");
+  if (box) box.classList.add("hidden");
+  if (b) b.textContent = "カメラで読む";
+}
+function openQrReceive() {
+  stopCamera();
+  var col = new QRLINK.Collector("L");
+  openModal('<h2 style="margin-top:0">出荷リストをQRで受け取る</h2>' +
+    '<div class="muted">パソコンの「パソコン用_QR受け渡し.html」→「① 出荷リストを端末へ」で出たQRを、1枚ずつ読みます（順番はどれからでもよい）。</div>' +
+    '<button id="mcamBtn" class="btn primary block" style="margin-top:10px">カメラで読む</button>' +
+    '<div id="mcamBox" class="hidden" style="margin-top:8px"><div class="cam" style="aspect-ratio:1/1"><video id="mcamVideo" playsinline muted autoplay></video>' +
+    '<div class="frame" style="left:8%;top:8%;width:84%;height:84%"></div><div class="camMsg" id="mcamMsg"></div></div></div>' +
+    '<input id="qrIn" class="input scan-input" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="スキャナで読む（ここをタップ）" style="margin-top:10px">' +
+    '<div id="qrMsg" class="result" style="margin-top:10px">まだ読んでいません</div><div id="qrSlots" class="chips"></div>' +
+    '<button id="qrClose" class="btn block" style="margin-top:6px">やめる</button>',
+    function (m) {
+      var take = function (text) {
+        var res = col.add(text), msg = m.querySelector("#qrMsg");
+        if (!res.ok) { msg.className = "result ng"; msg.textContent = "NG　" + res.msg; beep("ng"); return; }
+        var s = "";
+        for (var i = 1; i <= col.total; i++) s += '<span class="tag' + (col.parts[i - 1] ? " ok" : "") + '" style="font-size:16px;padding:4px 10px">' + i + '</span>';
+        m.querySelector("#qrSlots").innerHTML = s;
+        if (!res.done) {
+          msg.className = "result wait";
+          msg.innerHTML = esc(res.idx + " 枚目を受け取りました（" + col.count() + " / " + col.total + "）") + "<small>" +
+            esc((res.restarted ? "新しいQRなので、最初から集め直しています。" : "") + "まだ：" + col.missing().join("、") + " 枚目。パソコンで「次 ▶」を押してください") + "</small>";
+          beep("step");
+          return;
+        }
+        var parsed;
+        try { parsed = listFromQrText(col.text()); } catch (er) { parsed = { error: "中身を読めませんでした（" + er.message + "）" }; }
+        if (parsed.error) { msg.className = "result ng"; msg.textContent = "NG　" + parsed.error; beep("ng"); col.id = ""; return; }
+        beep("ok");
+        closeModal();
+        applyList(parsed.list, parsed.bad);
+      };
+      m.querySelector("#mcamBtn").onclick = function () { if (mcam.stream) stopModalCam(); else startModalCam(take); };
+      m.querySelector("#qrClose").onclick = function () { closeModal(); render(); };
+      var inp = m.querySelector("#qrIn");
+      inp.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" || e.keyCode === 13 || e.key === "Tab") { e.preventDefault(); var v = inp.value; inp.value = ""; take(v); }
+      });
+    });
+}
+function openQrSend() {
+  if (!R.length) { alert("記録がありません。"); return; }
+  stopCamera();
+  var chunks = QRLINK.pack("R", recordsQrText()), i = 0;
+  openModal('<h2 style="margin-top:0">記録をQRで出す（' + R.length + ' 件）</h2>' +
+    '<div class="muted">パソコンの「パソコン用_QR受け渡し.html」→「② 記録を端末から」で、1枚ずつ読んでもらいます（カメラかスキャナ）。</div>' +
+    '<div id="sendNo" style="font-size:24px;font-weight:700;text-align:center;margin:8px 0"></div>' +
+    '<div style="background:#fff;border-radius:12px;padding:8px;text-align:center"><canvas id="sendQr" style="width:100%;max-width:420px;image-rendering:pixelated"></canvas></div>' +
+    '<div class="row" style="margin-top:10px"><button class="btn grow" id="sendPrev">◀ 前</button><button class="btn primary grow" id="sendNext">次 ▶</button></div>' +
+    '<div class="muted" style="margin-top:6px">読みにくいときは、画面を明るくしてください。</div>' +
+    '<button class="btn block" id="sendClose" style="margin-top:10px">閉じる</button>',
+    function (m) {
+      var show = function () {
+        QRLINK.draw(m.querySelector("#sendQr"), chunks[i], 840);
+        m.querySelector("#sendNo").textContent = (i + 1) + " / " + chunks.length + " 枚目";
+        m.querySelector("#sendPrev").disabled = i === 0; m.querySelector("#sendNext").disabled = i === chunks.length - 1;
+      };
+      m.querySelector("#sendPrev").onclick = function () { if (i > 0) { i--; show(); } };
+      m.querySelector("#sendNext").onclick = function () { if (i < chunks.length - 1) { i++; show(); } };
+      m.querySelector("#sendClose").onclick = function () { closeModal(); render(); };
+      show();
+    });
+}
+
 function applyList(list, bad) {
   var n = Object.keys(list.master).length;
   var msg = "出荷リスト「" + list.name + "」\n" + list.rows.length + " 行" + (n ? "、品番マスタ " + n + " 品番" : "") + "\n" +
@@ -1259,6 +1405,10 @@ function renderSet() {
     '<div class="card"><h2 style="margin-top:0">出荷リスト</h2>' +
     '<div class="muted" style="margin-bottom:8px">' + (L ? "今のリスト：" + esc(L.name) + "（" + L.rows.length + " 行、" + esc(L.loaded) + " 取り込み）" : "まだ入っていません") + '</div>' +
     '<button id="impL" class="btn primary block">出荷リストを取り込む（パソコンから送ったCSV）</button></div>' +
+    '<div class="card"><h2 style="margin-top:0">QRで受け渡し（ネットなし）</h2>' +
+    '<div class="muted" style="margin-bottom:8px">パソコンで「パソコン用_QR受け渡し.html」を開いて使います。ファイルを送れないときの方法です。</div>' +
+    '<button id="qrRcv" class="btn primary block" style="margin-bottom:10px">出荷リストをQRで受け取る（パソコンの画面のQRを読む）</button>' +
+    '<button id="qrSend" class="btn block">記録をQRで出す（パソコンで読む）</button></div>' +
     '<div class="card"><h2 style="margin-top:0">この端末</h2>' +
     '<label class="field"><span>端末名（何台かで読むとき、どの端末の記録かを見分けます）</span>' +
     '<input id="dev" class="input" type="text" autocomplete="off" placeholder="例：iPad-1、Android-1" value="' + esc(S.device) + '"></label>' +
@@ -1310,6 +1460,8 @@ function kbTest() {
 }
 function bindSet() {
   document.getElementById("impL").onclick = importListFile;
+  document.getElementById("qrRcv").onclick = openQrReceive;
+  document.getElementById("qrSend").onclick = openQrSend;
   var dev = document.getElementById("dev");
   dev.onchange = function () { S.device = dev.value.trim(); saveAll(); };
   document.getElementById("snd").onchange = function (e) { S.sound = e.target.checked; saveAll(); };
@@ -1375,7 +1527,7 @@ function openModal(html, onMount) {
   bg.addEventListener("click", function (e) { if (e.target === bg) closeModal(); });
   if (onMount) onMount(bg.firstChild);
 }
-function closeModal() { document.getElementById("modalRoot").innerHTML = ""; }
+function closeModal() { stopModalCam(); document.getElementById("modalRoot").innerHTML = ""; }
 
 function render() {
   stopCamera();
