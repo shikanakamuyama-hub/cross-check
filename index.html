@@ -206,7 +206,7 @@ select.input { -webkit-appearance: none; appearance: none; }
    出荷リストが古いことがあるので、リスト外・品番違い・数量オーバーは止めずに「注意」として記録する。
    記録は端末の中（localStorage）にだけ保存し、ネットには送らない。CSV でパソコンへ渡す。 */
 
-var APP_VERSION = "1.0.8";
+var APP_VERSION = "1.0.9";
 var IS_ANDROID = /Android/i.test(navigator.userAgent);
 var IS_WINDOWS = /Windows/i.test(navigator.userAgent);
 var LS_SET = "niten.settings.v1";
@@ -1241,18 +1241,46 @@ function recordsQrText() {
 }
 // 受け取り画面のカメラ（QRだけを探す）
 var mcam = { stream: null, timer: 0, canvas: null, last: "", lastAt: 0 };
+// 受け取り画面のカメラ（背面／前面を選べる。読取画面のカメラとは別に覚える：S.qrFacing）
+var FRONT_RE = /front|user|facetime|前面|フロント|内側/i;
+function qrCamStream() {
+  var mode = S.qrFacing === "user" ? "user" : "environment";
+  var size = { width: { ideal: 1280 }, height: { ideal: 720 } };
+  var v = { facingMode: { exact: mode }, width: size.width, height: size.height };
+  // iPad・Android は facingMode で選べる。選べない端末（Windows タブレットなど）は、カメラの名前か順番で選ぶ
+  return navigator.mediaDevices.getUserMedia({ video: v, audio: false }).catch(function () {
+    return navigator.mediaDevices.getUserMedia({ video: true, audio: false }).then(function (tmp) {
+      return navigator.mediaDevices.enumerateDevices().then(function (list) {
+        tmp.getTracks().forEach(function (t) { t.stop(); });
+        var cams = list.filter(function (d) { return d.kind === "videoinput"; });
+        var want = cams.filter(function (d) { return mode === "environment" ? REAR_RE.test(d.label) : FRONT_RE.test(d.label); });
+        // 名前でわからなければ「もう一方ではない名前のカメラ」。名前が無ければ順番（背面＝最後、前面＝最初）
+        var named = cams.filter(function (d) { return d.label; });
+        if (!want.length && mode === "user") want = named.filter(function (d) { return !REAR_RE.test(d.label); });
+        if (!want.length && mode === "environment") want = named.filter(function (d) { return !FRONT_RE.test(d.label); });
+        var pick = want.length ? want[0] : cams.length ? cams[mode === "environment" ? cams.length - 1 : 0] : null;
+        var c = { width: size.width, height: size.height };
+        if (pick) c.deviceId = { exact: pick.deviceId };
+        return navigator.mediaDevices.getUserMedia({ video: c, audio: false });
+      });
+    });
+  });
+}
 function startModalCam(onText) {
   var box = document.getElementById("mcamBox"), msg = document.getElementById("mcamMsg");
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { alert("この画面ではカメラを使えません。スキャナで読んでください。"); return; }
   box.classList.remove("hidden");
   msg.textContent = "カメラを準備しています…";
-  navigator.mediaDevices.getUserMedia(cameraConstraints()).then(function (s) {
+  qrCamStream().then(function (s) {
     if (!document.getElementById("mcamBox")) { s.getTracks().forEach(function (t) { t.stop(); }); return; }
     mcam.stream = s;
     var v = document.getElementById("mcamVideo");
     v.setAttribute("playsinline", ""); v.muted = true; v.srcObject = s;
     var p = v.play(); if (p && p.catch) p.catch(function () { });
-    msg.textContent = "パソコンの画面のQRを枠に入れてください";
+    var lb = trackLabel(s).replace(/\s*\([0-9a-f]{4}:[0-9a-f]{4}\)\s*$/i, "");
+    msg.textContent = "パソコンの画面のQRを枠に入れてください" + (lb ? "（" + lb + "）" : "");
+    // 前面カメラは鏡のように見せる（向けやすいように）
+    v.style.transform = S.qrFacing === "user" ? "scaleX(-1)" : "";
     document.getElementById("mcamBtn").textContent = "カメラを止める";
     mcam.canvas = mcam.canvas || document.createElement("canvas");
     var loop = function () {
@@ -1292,7 +1320,9 @@ function openQrReceive() {
   var col = new QRLINK.Collector("L");
   openModal('<h2 style="margin-top:0">出荷リストをQRで受け取る</h2>' +
     '<div class="muted">パソコンの「パソコン用_QR受け渡し.html」→「① 出荷リストを端末へ」で出たQRを、1枚ずつ読みます（順番はどれからでもよい）。</div>' +
-    '<button id="mcamBtn" class="btn primary block" style="margin-top:10px">カメラで読む</button>' +
+    '<div class="seg" style="margin-top:10px"><button data-qf="environment"' + (S.qrFacing !== "user" ? ' class="sel"' : "") + '>背面カメラ</button>' +
+    '<button data-qf="user"' + (S.qrFacing === "user" ? ' class="sel"' : "") + '>前面カメラ（画面側）</button></div>' +
+    '<button id="mcamBtn" class="btn primary block">カメラで読む</button>' +
     '<div id="mcamBox" class="hidden" style="margin-top:8px"><div class="cam" style="aspect-ratio:1/1"><video id="mcamVideo" playsinline muted autoplay></video>' +
     '<div class="frame" style="left:8%;top:8%;width:84%;height:84%"></div><div class="camMsg" id="mcamMsg"></div></div></div>' +
     '<input id="qrIn" class="input scan-input" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="スキャナで読む（ここをタップ）" style="margin-top:10px">' +
@@ -1320,6 +1350,14 @@ function openQrReceive() {
         applyList(parsed.list, parsed.bad);
       };
       m.querySelector("#mcamBtn").onclick = function () { if (mcam.stream) stopModalCam(); else startModalCam(take); };
+      // 背面／前面を選ぶ（カメラが動いていれば、すぐに切り替える）
+      Array.prototype.forEach.call(m.querySelectorAll("[data-qf]"), function (b) {
+        b.onclick = function () {
+          S.qrFacing = b.getAttribute("data-qf"); saveAll();
+          Array.prototype.forEach.call(m.querySelectorAll("[data-qf]"), function (x) { x.classList.toggle("sel", x === b); });
+          if (mcam.stream) { stopModalCam(); startModalCam(take); }
+        };
+      });
       m.querySelector("#qrClose").onclick = function () { closeModal(); render(); };
       var inp = m.querySelector("#qrIn");
       inp.addEventListener("keydown", function (e) {
