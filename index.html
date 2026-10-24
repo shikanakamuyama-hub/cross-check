@@ -178,6 +178,7 @@ select.input { -webkit-appearance: none; appearance: none; }
 .modal { background: var(--bg); width: 100%; max-width: 640px; max-height: 92vh; overflow-y: auto;
   border-radius: 18px 18px 0 0; padding: 16px; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
 @media (min-width: 700px) { .modal-bg { align-items: center; } .modal { border-radius: 18px; } }
+.banner.stale { background: #FFEB9C; border: 2px solid #C9A227; font-size: 16px; }
 .banner { background: #FFF2CC; border: 1px solid #E5C76B; border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; font-size: 15px; }
 .hidden { display: none !important; }
 </style>
@@ -205,7 +206,7 @@ select.input { -webkit-appearance: none; appearance: none; }
    出荷リストが古いことがあるので、リスト外・品番違い・数量オーバーは止めずに「注意」として記録する。
    記録は端末の中（localStorage）にだけ保存し、ネットには送らない。CSV でパソコンへ渡す。 */
 
-var APP_VERSION = "1.0.7";
+var APP_VERSION = "1.0.8";
 var IS_ANDROID = /Android/i.test(navigator.userAgent);
 var IS_WINDOWS = /Windows/i.test(navigator.userAgent);
 var LS_SET = "niten.settings.v1";
@@ -441,6 +442,7 @@ function processScan(raw, source) {
   if (!raw) return;
   if (!S.tanto.trim()) { setResult("ng", "NG　作業者を入れてから読んでください", "記録していません　読んだ内容：" + raw); beep("ng"); return; }
   if (!L || !L.rows.length) { setResult("ng", "NG　出荷リストが入っていません", "設定 →「出荷リストを取り込む」で、パソコンから送った出荷リストを入れてください"); beep("ng"); return; }
+  if (listIsStale()) { setResult("ng", "NG　出荷リストを確かめてください", "上の黄色い欄で、今日の出荷リストか確かめてから読んでください。記録していません"); beep("ng"); return; }
   var lab = parseLabel(raw), how = source === "camera" ? "カメラ" : "スキャナ";
   if (!lab) {
     // カンマがあるのに社内ラベルの形に合わないものは、かんばんとして扱わない（1つ目に読んだものはそのまま）
@@ -777,6 +779,9 @@ function renderScan() {
   var banner = "";
   if (saveError) banner += '<div class="banner">' + esc(saveError) + '</div>';
   if (!L) banner += '<div class="banner">出荷リストが入っていません。設定 →「出荷リストを取り込む」で入れてください。</div>';
+  else if (listIsStale()) banner += '<div class="banner stale"><b>この出荷リストは ' + esc(listDay(L).slice(5)) + ' に取り込んだものです。今日の出荷リストか確かめてください。</b>' +
+    '<div class="muted" style="margin:4px 0 8px">リスト：' + esc(L.name) + '　／　違うときは、設定 →「出荷リストを取り込む」で今日のリストを入れてください。</div>' +
+    '<button id="listOk" class="btn block">今日もこの出荷リストで読む</button></div>';
   else if (shortNohinWarning()) banner += '<div class="banner">納品番号が短いので、設定の「納入かんばんの読み方」を確かめてください（誤品を見逃さないため）。</div>';
   var cnt = L ? Object.keys(listIndex()).length : 0;
   return banner +
@@ -786,7 +791,7 @@ function renderScan() {
     '<div id="result" class="result"></div>' +
     '<div class="card" style="margin-top:12px"><div class="info">' +
     '<button id="btnTanto" class="' + (S.tanto ? "" : "empty") + '"><small>作業者</small><b>' + esc(S.tanto || "未入力（タップ）") + '</b></button>' +
-    '<button id="btnList" class="' + (L ? "" : "empty") + '"><small>出荷リスト' + (L ? "（" + cnt + " 件）" : "") + '</small><b>' + esc(L ? L.name : "なし（タップ）") + '</b></button>' +
+    '<button id="btnList" class="' + (L ? "" : "empty") + '"><small>出荷リスト' + (L ? "（" + cnt + " 件・" + esc(String(L.loaded || "").slice(5, 16)) + " 取り込み）" : "") + '</small><b>' + esc(L ? L.name : "なし（タップ）") + '</b></button>' +
     '</div></div>' +
     '</div><div>' +
     '<div class="card">' +
@@ -803,7 +808,16 @@ function renderScan() {
     '<div class="card"><div class="row"><b class="grow">最近の記録</b><span class="muted" id="recCount"></span></div><div id="recent" style="margin-top:8px"></div></div>' +
     '</div></div>';
 }
+// 出荷リストが、今日より前に取り込んだもので、今日まだ確かめていないか（同じリストを何日か使うときは、1日に1回確かめる）
+function todayText() { return nowText().slice(0, 10); }
+function listDay(list) { return String(list && list.loaded || "").slice(0, 10); }
+function listIsStale() { return !!L && listDay(L) !== "" && listDay(L) < todayText() && L.okDay !== todayText(); }
 function bindScan() {
+  var lo = document.getElementById("listOk");
+  if (lo) lo.onclick = function () {
+    if (!confirm("出荷リスト「" + L.name + "」（" + listDay(L) + " 取り込み）で、今日も読みますか？")) return;
+    L.okDay = todayText(); saveAll(); lastResult = null; render();
+  };
   document.getElementById("btnTanto").onclick = editTanto;
   document.getElementById("btnList").onclick = function () {
     if (L) { tab = "prog"; render(); window.scrollTo(0, 0); } else importListFile();
@@ -1438,7 +1452,7 @@ function renderSet() {
     '<button id="impRec" class="btn block" style="margin-bottom:10px">ほかの端末の記録を取り込む（CSV）</button>' +
     '<button id="expSet" class="btn block" style="margin-bottom:10px">読み方の設定を書き出す（ほかの端末にそろえる）</button>' +
     '<button id="impSet" class="btn block" style="margin-bottom:10px">読み方の設定を取り込む</button>' +
-    '<button id="clr" class="btn danger block">記録を全部消す（新しい出荷）</button>' +
+    '<button id="clr" class="btn danger block">記録と出荷リストを全部消す（新しい出荷）</button>' +
     '<div class="muted" style="margin-top:10px">記録はこの端末の中にだけ保存されます（ネットには送りません）。記録 ' + R.length + ' 件。</div>' +
     '</div>' +
     '<div class="muted" style="text-align:center">2点照合ツール 版 ' + APP_VERSION + '</div>';
@@ -1512,10 +1526,13 @@ function bindSet() {
     });
   };
   document.getElementById("clr").onclick = function () {
-    if (!R.length) { alert("記録はありません。"); return; }
-    if (!confirm("記録 " + R.length + " 件を全部消して、新しい出荷を始めます。\n先に「記録をCSVで書き出す」をしましたか？")) return;
+    if (!R.length && !L) { alert("記録も出荷リストもありません。"); return; }
+    if (!confirm("記録 " + R.length + " 件と出荷リストを全部消して、新しい出荷を始めます。\n" +
+      (R.length ? "先に「記録をCSVで書き出す」（または「記録をQRで出す」）をしましたか？" : ""))) return;
     if (!confirm("本当に消してよいですか？（元に戻せません）")) return;
-    R = []; S.seq = 0; S.pend = null; lastResult = null; saveAll(); render();
+    // 前の出荷リストのまま次の出荷を読まないように、出荷リストも消す
+    R = []; L = null; S.seq = 0; S.pend = null; lastResult = null; saveAll(); render();
+    alert("消しました。次の出荷の出荷リストを取り込んでください。");
   };
 }
 
