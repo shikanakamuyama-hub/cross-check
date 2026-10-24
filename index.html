@@ -88,6 +88,14 @@ select.input { -webkit-appearance: none; appearance: none; }
 .result .big { font-size: 26px; }
 .result .kv { display: grid; grid-template-columns: auto 1fr; gap: 0 10px; font-size: 16px; font-weight: 400; margin-top: 6px; color: var(--text); }
 .result .kv b { font-weight: 700; }
+.result .remain { display: block; font-size: 30px; font-weight: 800; margin-top: 4px; }
+/* 全部そろったとき */
+.alldone { position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 1000; background: #0E6B0E; color: #fff;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; gap: 14px; }
+.alldone .ad1 { font-size: 46px; font-weight: 800; line-height: 1.2; }
+.alldone .ad2 { font-size: 22px; }
+.alldone .ad3 { font-size: 18px; background: #FFEB9C; color: #7A5200; border-radius: 12px; padding: 8px 14px; }
+.alldone .btn { background: #fff; color: #1F2328; border-color: transparent; min-width: 200px; font-size: 20px; }
 .flash { animation: flash .5s; }
 @keyframes flash { from { transform: scale(1.03); } to { transform: scale(1); } }
 .cam { position: relative; background: #000; border-radius: 14px; overflow: hidden; aspect-ratio: 4 / 3; }
@@ -206,7 +214,7 @@ select.input { -webkit-appearance: none; appearance: none; }
    出荷リストが古いことがあるので、リスト外・品番違い・数量オーバーは止めずに「注意」として記録する。
    記録は端末の中（localStorage）にだけ保存し、ネットには送らない。CSV でパソコンへ渡す。 */
 
-var APP_VERSION = "1.0.9";
+var APP_VERSION = "1.2.0";
 var IS_ANDROID = /Android/i.test(navigator.userAgent);
 var IS_WINDOWS = /Windows/i.test(navigator.userAgent);
 var LS_SET = "niten.settings.v1";
@@ -298,6 +306,11 @@ function cleanText(s) {
     else out += s.charAt(i);
   }
   return out.trim();
+}
+// 日付を yyyy/mm/dd にそろえる（読めなければ ""）
+function normDay(s) {
+  var m = /^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/.exec(cleanText(s));
+  return m ? m[1] + "/" + pad(parseInt(m[2], 10)) + "/" + pad(parseInt(m[3], 10)) : "";
 }
 // 比べるときの形（スペースを取り、英字を大文字にする）
 function normKey(s) { return cleanText(s).replace(/\s+/g, "").toUpperCase(); }
@@ -470,7 +483,8 @@ function processScan(raw, source) {
     var again = !!p, lk = kanbanLookup(raw);
     S.pend = cur; saveAll();
     setResult("wait", (again ? "かんばんを読み直しました" : "① かんばん OK") + "　→ 次は ② 社内ラベル を読んでください",
-      (lk.group ? "出荷リスト No." + lk.group.rows[0].no + "　納品番号 " + lk.group.nohin + "　" + groupHinban(lk.group).join("・") :
+      (lk.group ? "出荷リスト No." + lk.group.rows[0].no + "　納品番号 " + lk.group.nohin + "　" + groupHinban(lk.group).join("・") +
+        "　（" + remainText(lk.group, sumFor(lk.group.nohin), boxesFor(lk.group.nohin), true) + "）" :
         "（このかんばんの納品番号は出荷リストに見つかりません）") + "　読んだ内容：" + raw + "　" + how);
     beep("step");
     renderSteps();
@@ -508,10 +522,41 @@ function finishPair(kb, lb, how) {
     if (sum > g.qty) warns.push("数量オーバー（納品数 " + fmtNum(g.qty) + "、読んだ合計 " + fmtNum(sum) + "）");
   }
   rec.warn = warns.join("／");
+  var wasDone = listDone(buildProgress());
   R.push(rec); saveAll();
   showPairResult(rec, g);
-  beep(warns.length ? "warn" : "ok");
+  var pg = buildProgress();
+  if (!wasDone && listDone(pg)) { beep("done"); showAllDone(pg); }
+  else beep(warns.length ? "warn" : "ok");
   renderSteps(); renderRecent();
+}
+// 出荷リストの納品番号が全部「完了」か
+function listDone(p) { return p.rows.length > 0 && p.c.done === p.rows.length; }
+// この納品番号の残り（atKanban：① かんばんを読んだところ）
+function remainText(g, sum, boxes, atKanban) {
+  var rq = g.qty - sum, rb = g.labels ? g.labels - boxes : 0;
+  if (rq === 0) return atKanban ? "この納品番号はもうそろっています" : "この納品番号はそろいました";
+  if (rq < 0) return "納品数より " + fmtNum(-rq) + " 多いです";
+  return (rb > 0 ? "あと " + rb + " 箱　" : "") + "残り数量 " + fmtNum(rq);
+}
+function showAllDone(p) {
+  closeAllDone();
+  var el = document.createElement("div");
+  el.id = "allDone"; el.className = "alldone";
+  el.innerHTML = '<div class="ad1">全部そろいました</div>' +
+    '<div class="ad2">出荷リストの納品番号 ' + p.rows.length + ' 件、すべて完了です</div>' +
+    (p.outs.length || p.hinWarn ? '<div class="ad3">注意の記録があります（リスト外 ' + p.outs.length + ' 件・品番違い ' + p.hinWarn + ' 件）。パソコンで確かめてください</div>' : "") +
+    '<div class="ad2">記録を CSV で書き出して（または QR で）パソコンへ送ってください</div>' +
+    '<button class="btn" id="adClose">閉じる</button>';
+  el.onclick = closeAllDone;
+  document.body.appendChild(el);
+}
+function closeAllDone() {
+  var el = document.getElementById("allDone");
+  if (!el) return;
+  el.parentNode.removeChild(el);
+  var si = document.getElementById("scanInput");
+  if (si) try { si.focus(); } catch (e) { }
 }
 // 納品番号ごとの、読んだ入数の合計（取り消し・NG は入れない）
 function sumFor(nohin) {
@@ -542,7 +587,8 @@ function showPairResult(rec, g) {
   if (rec.warn) head = "注意　No." + rec.no + "　" + rec.warn;
   else if (g && sum === g.qty) head = "OK　No." + rec.no + "　納品番号 " + rec.nohin + " がそろいました";
   else head = "OK　No." + rec.no + "　納品番号 " + rec.nohin;
-  lastResult = { cls: rec.warn ? "warn" : "ok", html: '<span class="big">' + esc(head) + '</span>' + kv +
+  lastResult = { cls: rec.warn ? "warn" : "ok", html: '<span class="big">' + esc(head) + '</span>' +
+    (g ? '<span class="remain">' + esc(remainText(g, sum, boxes)) + '</span>' : "") + kv +
     (rec.warn ? '<small style="margin-top:6px">記録しました。出荷リストが古いことがあるので、パソコンで確かめてください。</small>' : "") };
   showResult(true);
 }
@@ -565,7 +611,8 @@ function beep(kind) {
     step: [[990, 0, 0.06, "sine", 0.2]],
     ok: [[1320, 0, 0.09, "sine", 0.25], [1760, 0.11, 0.12, "sine", 0.25]],
     warn: [[880, 0, 0.12, "triangle", 0.3], [880, 0.18, 0.12, "triangle", 0.3], [880, 0.36, 0.12, "triangle", 0.3]],
-    ng: [[330, 0, 0.18, "square", 0.12], [260, 0.22, 0.4, "square", 0.12]]
+    ng: [[330, 0, 0.18, "square", 0.12], [260, 0.22, 0.4, "square", 0.12]],
+    done: [[1047, 0, 0.12, "sine", 0.3], [1319, 0.14, 0.12, "sine", 0.3], [1568, 0.28, 0.12, "sine", 0.3], [2093, 0.42, 0.45, "sine", 0.3]]
   };
   if (S.sound && audioCtx) {
     try {
@@ -579,7 +626,7 @@ function beep(kind) {
       });
     } catch (e) { }
   }
-  var vib = { step: 40, ok: 60, warn: [80, 60, 80, 60, 80], ng: [200, 100, 200] };
+  var vib = { step: 40, ok: 60, warn: [80, 60, 80, 60, 80], ng: [200, 100, 200], done: [100, 60, 100, 60, 400] };
   if (navigator.vibrate) { try { navigator.vibrate(vib[kind] || 60); } catch (e) { } }
 }
 document.addEventListener("touchend", unlockAudio, { passive: true });
@@ -779,7 +826,7 @@ function renderScan() {
   var banner = "";
   if (saveError) banner += '<div class="banner">' + esc(saveError) + '</div>';
   if (!L) banner += '<div class="banner">出荷リストが入っていません。設定 →「出荷リストを取り込む」で入れてください。</div>';
-  else if (listIsStale()) banner += '<div class="banner stale"><b>この出荷リストは ' + esc(listDay(L).slice(5)) + ' に取り込んだものです。今日の出荷リストか確かめてください。</b>' +
+  else if (listIsStale()) banner += '<div class="banner stale"><b>' + esc(staleText()) + '</b>' +
     '<div class="muted" style="margin:4px 0 8px">リスト：' + esc(L.name) + '　／　違うときは、設定 →「出荷リストを取り込む」で今日のリストを入れてください。</div>' +
     '<button id="listOk" class="btn block">今日もこの出荷リストで読む</button></div>';
   else if (shortNohinWarning()) banner += '<div class="banner">納品番号が短いので、設定の「納入かんばんの読み方」を確かめてください（誤品を見逃さないため）。</div>';
@@ -791,7 +838,7 @@ function renderScan() {
     '<div id="result" class="result"></div>' +
     '<div class="card" style="margin-top:12px"><div class="info">' +
     '<button id="btnTanto" class="' + (S.tanto ? "" : "empty") + '"><small>作業者</small><b>' + esc(S.tanto || "未入力（タップ）") + '</b></button>' +
-    '<button id="btnList" class="' + (L ? "" : "empty") + '"><small>出荷リスト' + (L ? "（" + cnt + " 件・" + esc(String(L.loaded || "").slice(5, 16)) + " 取り込み）" : "") + '</small><b>' + esc(L ? L.name : "なし（タップ）") + '</b></button>' +
+    '<button id="btnList" class="' + (L ? "" : "empty") + '"><small>出荷リスト' + (L ? "（" + cnt + " 件・" + (L.loadDay ? "積込 " + esc(L.loadDay.slice(5)) : esc(String(L.loaded || "").slice(5, 16)) + " 取り込み") + "）" : "") + '</small><b>' + esc(L ? L.name : "なし（タップ）") + '</b></button>' +
     '</div></div>' +
     '</div><div>' +
     '<div class="card">' +
@@ -811,11 +858,20 @@ function renderScan() {
 // 出荷リストが、今日より前に取り込んだもので、今日まだ確かめていないか（同じリストを何日か使うときは、1日に1回確かめる）
 function todayText() { return nowText().slice(0, 10); }
 function listDay(list) { return String(list && list.loaded || "").slice(0, 10); }
-function listIsStale() { return !!L && listDay(L) !== "" && listDay(L) < todayText() && L.okDay !== todayText(); }
+// 積込日（出荷リストのCSVに入っている）があれば積込日が今日か、無ければ取り込んだ日が今日より前か、で見る
+function listIsStale() {
+  if (!L || L.okDay === todayText()) return false;
+  if (L.loadDay) return L.loadDay !== todayText();
+  return listDay(L) !== "" && listDay(L) < todayText();
+}
+function staleText() {
+  return L.loadDay ? "この出荷リストの積込日は " + L.loadDay.slice(5) + " です（今日は " + todayText().slice(5) + "）。今日の出荷リストか確かめてください。" :
+    "この出荷リストは " + listDay(L).slice(5) + " に取り込んだものです。今日の出荷リストか確かめてください。";
+}
 function bindScan() {
   var lo = document.getElementById("listOk");
   if (lo) lo.onclick = function () {
-    if (!confirm("出荷リスト「" + L.name + "」（" + listDay(L) + " 取り込み）で、今日も読みますか？")) return;
+    if (!confirm("出荷リスト「" + L.name + "」（" + (L.loadDay ? "積込日 " + L.loadDay : listDay(L) + " 取り込み") + "）で、今日も読みますか？")) return;
     L.okDay = todayText(); saveAll(); lastResult = null; render();
   };
   document.getElementById("btnTanto").onclick = editTanto;
@@ -1067,7 +1123,7 @@ function renderProg() {
   }).join("");
   return '<h1>照合状況</h1>' +
     (p.allDone ? '<div class="done-banner">✓ 出荷リストの全部の納品番号がそろいました</div>' : "") +
-    '<div class="card"><div class="muted" style="margin-bottom:6px">出荷リスト：' + esc(L.name) + '（' + esc(L.loaded) + ' 取り込み）</div>' +
+    '<div class="card"><div class="muted" style="margin-bottom:6px">出荷リスト：' + esc(L.name) + '（' + (L.loadDay ? '積込日 ' + esc(L.loadDay) + '、' : '') + esc(L.loaded) + ' 取り込み）</div>' +
     '<div class="stats">' +
     '<div class="stat ok"><b>' + p.c.done + '</b><small>完了</small></div>' +
     '<div class="stat"><b>' + p.c.part + '</b><small>不足</small></div>' +
@@ -1186,6 +1242,7 @@ function parseListCsv(text, fileName) {
     var r = { no: g("No.") || g("No"), nohin: g("納品番号"), noki: g("納期"), hinban: g("品番"), hinmei: g("品名"),
       qty: toInt(g("納品数")), kishu: g("機種"), irisu: g("通函最大入り数"), biko: g("備考"), labels: toInt(g("ラベル枚数")), hasu: g("端数入数") };
     if (!r.nohin && !r.hinban) return;
+    if (!list.loadDay) list.loadDay = normDay(g("積込日"));
     if (!r.nohin || !(r.qty >= 0)) { bad++; return; }
     if (!(r.labels >= 0)) r.labels = 0;
     if (!r.no) r.no = String(list.rows.length + 1);
@@ -1220,6 +1277,7 @@ function listFromQrText(text) {
     if (c[0] !== "S") return;
     var r = { no: c[1] || "", nohin: c[2] || "", noki: c[3] || "", hinban: c[4] || "", hinmei: c[5] || "", qty: toInt(c[6]),
       kishu: c[7] || "", irisu: c[8] || "", biko: c[9] || "", labels: toInt(c[10]), hasu: c[11] || "" };
+    if (!list.loadDay) list.loadDay = normDay(c[12]);
     if (!r.nohin || !(r.qty >= 0)) { bad++; return; }
     if (!(r.labels >= 0)) r.labels = 0;
     if (!r.no) r.no = String(list.rows.length + 1);
@@ -1392,6 +1450,7 @@ function openQrSend() {
 function applyList(list, bad) {
   var n = Object.keys(list.master).length;
   var msg = "出荷リスト「" + list.name + "」\n" + list.rows.length + " 行" + (n ? "、品番マスタ " + n + " 品番" : "") + "\n" +
+    (list.loadDay ? "積込日：" + list.loadDay + (list.loadDay !== todayText() ? "（今日ではありません）" : "（今日）") + "\n" : "") +
     (bad ? "（納品番号か納品数がない " + bad + " 行は入れていません）\n" : "");
   var live = R.filter(function (r) { return !r.cancel; }).length;
   if (L && R.length) {
@@ -1455,7 +1514,7 @@ function renderSet() {
   var k = S.kb;
   return '<h1>設定</h1>' +
     '<div class="card"><h2 style="margin-top:0">出荷リスト</h2>' +
-    '<div class="muted" style="margin-bottom:8px">' + (L ? "今のリスト：" + esc(L.name) + "（" + L.rows.length + " 行、" + esc(L.loaded) + " 取り込み）" : "まだ入っていません") + '</div>' +
+    '<div class="muted" style="margin-bottom:8px">' + (L ? "今のリスト：" + esc(L.name) + "（" + L.rows.length + " 行、" + (L.loadDay ? "積込日 " + esc(L.loadDay) + "、" : "") + esc(L.loaded) + " 取り込み）" : "まだ入っていません") + '</div>' +
     '<button id="impL" class="btn primary block">出荷リストを取り込む（パソコンから送ったCSV）</button></div>' +
     '<div class="card"><h2 style="margin-top:0">QRで受け渡し（ネットなし）</h2>' +
     '<div class="muted" style="margin-bottom:8px">パソコンで「パソコン用_QR受け渡し.html」を開いて使います。ファイルを送れないときの方法です。</div>' +
