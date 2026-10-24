@@ -1,0 +1,1370 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="2点照合">
+<meta name="theme-color" content="#44546A">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>2点照合ツール</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #F2F3F5;
+  --card: #FFFFFF;
+  --text: #1F2328;
+  --sub: #5B6370;
+  --line: #D0D4DA;
+  --head: #44546A;
+  --accent: #2F75B5;
+  --ok-bg: #C6EFCE; --ok-text: #006100;
+  --ng-bg: #FFC7CE; --ng-text: #9C0006;
+  --warn-bg: #FFEB9C; --warn-text: #7A5200;
+  --tab-h: 64px;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+  font-family: -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif;
+  font-size: 17px; line-height: 1.45; -webkit-text-size-adjust: 100%; }
+body { padding-bottom: calc(var(--tab-h) + env(safe-area-inset-bottom)); }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+.wrap { max-width: 980px; margin: 0 auto; padding: 12px 16px 24px;
+  padding-top: calc(12px + env(safe-area-inset-top)); }
+h1 { font-size: 22px; margin: 4px 0 12px; }
+h2 { font-size: 18px; margin: 18px 0 8px; }
+.card { background: var(--card); border-radius: 14px; padding: 14px; margin-bottom: 12px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.muted { color: var(--sub); font-size: 14px; }
+.row { display: flex; gap: 8px; align-items: center; }
+.grow { flex: 1; min-width: 0; }
+.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 52px;
+  padding: 6px 18px; text-align: center; line-height: 1.3; border-radius: 12px; border: 1px solid var(--line); background: var(--card);
+  font-weight: 600; }
+.btn:active { filter: brightness(.92); }
+.btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn.danger { background: #fff; color: #C00000; border-color: #E6A3A3; }
+.btn.block { display: flex; width: 100%; }
+.btn.small { min-height: 40px; padding: 0 12px; font-size: 15px; border-radius: 10px; }
+.btn:disabled { opacity: .35; }
+.field { display: block; margin-bottom: 12px; }
+.field > span { display: block; font-size: 14px; color: var(--sub); margin-bottom: 4px; }
+.input { width: 100%; min-height: 52px; padding: 0 14px; border: 1px solid var(--line);
+  border-radius: 12px; background: #fff; font-size: 18px; }
+.input:focus { outline: 3px solid rgba(47,117,181,.35); border-color: var(--accent); }
+select.input { -webkit-appearance: none; appearance: none; }
+
+/* 読取画面 */
+.info { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.info button { text-align: left; min-height: 64px; padding: 8px 12px; border-radius: 12px;
+  border: 1px solid var(--line); background: #FFF8E6; min-width: 0; }
+.info button b { display: block; font-size: 19px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.info button small { color: var(--sub); font-size: 13px; }
+.info button.empty b { color: #C00000; }
+.steps { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.step { border-radius: 12px; border: 2px dashed var(--line); padding: 8px 12px; min-height: 76px; background: #fff; min-width: 0; }
+.step .lbl { font-size: 14px; color: var(--sub); }
+.step .val { font-size: 18px; font-weight: 700; word-break: break-all; }
+.step.done { border: 2px solid #5B9B4B; background: #EEF7EA; }
+.step.next { border: 3px solid var(--accent); background: #EEF5FC; }
+.result { border-radius: 14px; padding: 14px 16px; font-size: 20px; font-weight: 700; min-height: 64px;
+  background: #E7E9EC; color: var(--sub); word-break: break-all; }
+.result.ok { background: var(--ok-bg); color: var(--ok-text); }
+.result.ng { background: var(--ng-bg); color: var(--ng-text); }
+.result.warn { background: var(--warn-bg); color: var(--warn-text); }
+.result.wait { background: #DDEBF7; color: #1F4E79; }
+.result small { display: block; font-size: 15px; font-weight: 400; }
+.result .big { font-size: 26px; }
+.result .kv { display: grid; grid-template-columns: auto 1fr; gap: 0 10px; font-size: 16px; font-weight: 400; margin-top: 6px; color: var(--text); }
+.result .kv b { font-weight: 700; }
+.flash { animation: flash .5s; }
+@keyframes flash { from { transform: scale(1.03); } to { transform: scale(1); } }
+.cam { position: relative; background: #000; border-radius: 14px; overflow: hidden; aspect-ratio: 4 / 3; }
+.cam video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cam .frame { position: absolute; left: 7%; top: 22%; width: 86%; height: 56%;
+  border: 3px solid rgba(255,255,255,.9); border-radius: 12px; box-shadow: 0 0 0 999px rgba(0,0,0,.25); }
+.cam .camMsg { position: absolute; left: 0; right: 0; bottom: 8px; text-align: center; color: #fff;
+  font-size: 15px; text-shadow: 0 1px 2px #000; }
+.scan-input { font-size: 20px; min-height: 60px; border: 3px solid var(--accent); background: #EEF5FC; }
+.scan-grid { display: grid; gap: 12px; }
+@media (min-width: 860px) {
+  .scan-grid { grid-template-columns: 1fr 1fr; align-items: start; }
+}
+.seg { display: flex; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin-bottom: 10px; }
+.seg button { flex: 1; min-height: 46px; border: 0; background: #fff; font-weight: 600; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button.sel { background: var(--head); color: #fff; }
+
+/* 記録 */
+.rec { display: flex; gap: 10px; align-items: stretch; padding: 10px 12px; border-radius: 12px;
+  margin-bottom: 8px; border: 1px solid rgba(0,0,0,.08); background: #fff; width: 100%; text-align: left; }
+.rec .no { font-size: 13px; color: var(--sub); min-width: 38px; }
+.rec .main { flex: 1; min-width: 0; }
+.rec .hin { font-size: 19px; font-weight: 700; word-break: break-all; }
+.rec .qty { font-size: 22px; font-weight: 700; white-space: nowrap; align-self: center; }
+.rec .meta { font-size: 13px; color: var(--sub); word-break: break-all; }
+.rec.ng { background: var(--ng-bg); }
+.rec.warn { background: #FFF6D5; }
+.rec.cancel { background: #EDEDED; color: #8A8F98; }
+.rec.cancel .hin, .rec.cancel .qty { text-decoration: line-through; }
+.rec .msg { font-size: 14px; font-weight: 600; }
+.rec.ng .msg { color: var(--ng-text); }
+.rec.warn .msg { color: var(--warn-text); }
+.tag { display: inline-block; font-size: 13px; padding: 1px 8px; border-radius: 999px; background: rgba(0,0,0,.08); margin-right: 4px; }
+.tag.ok { background: var(--ok-bg); color: var(--ok-text); }
+.tag.ng { background: var(--ng-bg); color: var(--ng-text); }
+.tag.warn { background: var(--warn-bg); color: var(--warn-text); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.chip { min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: #fff; font-size: 15px; }
+.chip.sel { background: var(--head); color: #fff; border-color: var(--head); }
+
+/* 照合状況 */
+.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
+.stat { border-radius: 12px; padding: 8px 10px; background: #F4F5F7; }
+.stat b { display: block; font-size: 24px; line-height: 1.2; }
+.stat small { color: var(--sub); font-size: 13px; }
+.stat.ok { background: var(--ok-bg); } .stat.ng { background: var(--ng-bg); } .stat.warn { background: var(--warn-bg); }
+.prog { display: block; width: 100%; text-align: left; border: 1px solid rgba(0,0,0,.08); border-radius: 12px;
+  padding: 10px 12px; margin-bottom: 8px; background: #fff; }
+.prog .top { display: flex; gap: 8px; align-items: baseline; }
+.prog .nh { font-size: 18px; font-weight: 700; word-break: break-all; flex: 1; min-width: 0; }
+.prog .st { font-size: 14px; font-weight: 700; padding: 1px 10px; border-radius: 999px; white-space: nowrap; }
+.prog .meta { font-size: 13px; color: var(--sub); word-break: break-all; }
+.prog .nums { display: flex; gap: 14px; flex-wrap: wrap; font-size: 15px; margin-top: 2px; }
+.prog .nums b { font-size: 18px; }
+.prog .bar { height: 6px; border-radius: 3px; background: #E3E5E8; margin-top: 6px; overflow: hidden; }
+.prog .bar i { display: block; height: 100%; background: #5B9B4B; }
+.prog.s-done { background: #EEF7EA; } .prog.s-done .st { background: var(--ok-bg); color: var(--ok-text); }
+.prog.s-part .st { background: #DDEBF7; color: #1F4E79; }
+.prog.s-none .st { background: #E7E9EC; color: var(--sub); }
+.prog.s-over { background: #FFF6D5; } .prog.s-over .st { background: var(--warn-bg); color: var(--warn-text); } .prog.s-over .bar i { background: #C9A227; }
+.prog.s-out { background: #FFF6D5; } .prog.s-out .st { background: var(--warn-bg); color: var(--warn-text); }
+.prog .warnline { color: var(--warn-text); font-size: 14px; font-weight: 600; }
+.done-banner { background: var(--ok-bg); color: var(--ok-text); border-radius: 14px; padding: 14px 16px; font-size: 20px; font-weight: 700; margin-bottom: 12px; }
+
+/* 設定 */
+.tokens { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.errtxt { color: var(--ng-text); font-size: 14px; font-weight: 600; margin-top: 4px; }
+.testbox { background: #F4F5F7; border-radius: 12px; padding: 10px 12px; margin-top: 8px; font-size: 15px; word-break: break-all; }
+
+/* タブ */
+.tabs { position: fixed; left: 0; right: 0; bottom: 0; display: flex; background: #fff;
+  border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); z-index: 10; }
+.tabs button { flex: 1; height: var(--tab-h); border: 0; background: none; font-size: 13px; color: var(--sub); }
+.tabs button b { display: block; font-size: 22px; line-height: 1.1; }
+.tabs button.sel { color: var(--accent); font-weight: 700; }
+
+/* モーダル */
+.modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 20; display: flex;
+  align-items: flex-end; justify-content: center; }
+.modal { background: var(--bg); width: 100%; max-width: 640px; max-height: 92vh; overflow-y: auto;
+  border-radius: 18px 18px 0 0; padding: 16px; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+@media (min-width: 700px) { .modal-bg { align-items: center; } .modal { border-radius: 18px; } }
+.banner { background: #FFF2CC; border: 1px solid #E5C76B; border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; font-size: 15px; }
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<nav class="tabs" id="tabs">
+  <button data-tab="scan"><b>▣</b>読取</button>
+  <button data-tab="prog"><b>✓</b>照合状況</button>
+  <button data-tab="list"><b>☰</b>記録</button>
+  <button data-tab="set"><b>⚙</b>設定</button>
+</nav>
+<div id="modalRoot"></div>
+<script src="jsQR.js"></script>
+<script src="zxing.min.js"></script>
+<script>
+"use strict";
+/* 2点照合ツール（iPad・Android・Windows タブレット・スマホ版）
+   出荷前に、1箱ごとに「納入かんばん（バーコード）」と「社内ラベル（QR：納品番号,品番,入数）」を読み、
+   ・2つの納品番号が同じか（誤品）を調べる。違えば NG
+   ・出荷リストの納品数と、納品番号ごとに読んだ入数の合計を比べる（過不足）
+   出荷リストが古いことがあるので、リスト外・品番違い・数量オーバーは止めずに「注意」として記録する。
+   記録は端末の中（localStorage）にだけ保存し、ネットには送らない。CSV でパソコンへ渡す。 */
+
+var APP_VERSION = "1.0.1";
+var IS_ANDROID = /Android/i.test(navigator.userAgent);
+var IS_WINDOWS = /Windows/i.test(navigator.userAgent);
+var LS_SET = "niten.settings.v1";
+var LS_LIST = "niten.list.v1";
+var LS_REC = "niten.records.v1";
+var TOKENS = ["納品番号", "品番", "入数", "読まない"];
+var DEFAULT_QR = "納品番号,品番,入数";
+var KB_MODES = [
+  { v: "contains", name: "入っていればOK（おすすめ）", memo: "かんばんの中のどこかに、社内ラベルの納品番号が入っていればOKにします。" },
+  { v: "whole", name: "全体が同じならOK", memo: "かんばん全体が、社内ラベルの納品番号と同じならOKにします。" },
+  { v: "pos", name: "決まった位置から取り出す", memo: "かんばんの「何文字目から何文字」を納品番号として比べます。" },
+  { v: "delim", name: "区切り文字で分けて取り出す", memo: "かんばんを区切り文字で分けた「何番目」を納品番号として比べます。" }
+];
+var CSV_HEAD = ["No.", "日時", "作業者", "結果", "注意", "納品番号", "品番", "入数", "かんばん（読んだ内容）", "社内ラベル（読んだ内容）",
+  "取消", "取消日時", "出荷リスト", "端末名", "ID"];
+
+var S = null;        // 設定
+var L = null;        // 出荷リスト
+var R = [];          // 記録
+var tab = "scan";
+var saveError = "";
+var listFilter = "";
+var progFilter = "";
+var lastResult = null;
+
+/* ---------------- 保存 ---------------- */
+function loadAll() {
+  S = null; L = null; R = [];
+  try { S = JSON.parse(localStorage.getItem(LS_SET) || "null"); } catch (e) { S = null; }
+  try { L = JSON.parse(localStorage.getItem(LS_LIST) || "null"); } catch (e) { L = null; }
+  try { R = JSON.parse(localStorage.getItem(LS_REC) || "[]") || []; } catch (e) { R = []; }
+  if (!S || typeof S !== "object") S = {};
+  if (typeof S.tanto !== "string") S.tanto = "";
+  if (!Array.isArray(S.tantos)) S.tantos = [];
+  if (typeof S.device !== "string") S.device = "";
+  if (typeof S.seq !== "number") S.seq = 0;
+  if (typeof S.sound !== "boolean") S.sound = true;
+  if (typeof S.camId !== "string") S.camId = "";
+  if (S.input !== "camera" && S.input !== "scanner") S.input = "camera";
+  if (typeof S.qrFmt !== "string" || formatError(normalizeFormat(S.qrFmt))) S.qrFmt = DEFAULT_QR;
+  if (!S.kb || typeof S.kb !== "object") S.kb = {};
+  if (!KB_MODES.some(function (m) { return m.v === S.kb.mode; })) S.kb.mode = "contains";
+  if (!(S.kb.start >= 1)) S.kb.start = 1;
+  if (!(S.kb.len >= 1)) S.kb.len = 20;
+  if (typeof S.kb.delim !== "string" || !S.kb.delim) S.kb.delim = ",";
+  if (!(S.kb.index >= 1)) S.kb.index = 1;
+  if (!S.pend || typeof S.pend !== "object") S.pend = null;
+  if (!L || typeof L !== "object" || !Array.isArray(L.rows)) L = null;
+  if (L && (!L.master || typeof L.master !== "object")) L.master = {};
+  if (!Array.isArray(R)) R = [];
+}
+function saveAll() {
+  try {
+    localStorage.setItem(LS_SET, JSON.stringify(S));
+    localStorage.setItem(LS_LIST, JSON.stringify(L));
+    localStorage.setItem(LS_REC, JSON.stringify(R));
+    saveError = "";
+  } catch (e) {
+    saveError = "端末に保存できませんでした（" + e.message + "）。すぐに「記録をCSVで書き出す」をしてください。";
+  }
+}
+
+/* ---------------- 共通 ---------------- */
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+  });
+}
+function pad(n, w) { n = String(n); while (n.length < (w || 2)) n = "0" + n; return n; }
+function nowText(d) {
+  d = d || new Date();
+  return d.getFullYear() + "/" + pad(d.getMonth() + 1) + "/" + pad(d.getDate()) + " " +
+    pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+}
+function stamp(d) {
+  d = d || new Date();
+  return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + "_" + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds());
+}
+// 改行・タブを取り、全角の英数字・記号を半角にする（「、」はカンマとみなす）
+function cleanText(s) {
+  s = String(s == null ? "" : s).replace(/[\r\n\t]/g, "");
+  var out = "";
+  for (var i = 0; i < s.length; i++) {
+    var c = s.charCodeAt(i);
+    if (c >= 0xFF01 && c <= 0xFF5E) out += String.fromCharCode(c - 0xFEE0);
+    else if (c === 0x3000) out += " ";
+    else if (c === 0x3001) out += ",";
+    else out += s.charAt(i);
+  }
+  return out.trim();
+}
+// 比べるときの形（スペースを取り、英字を大文字にする）
+function normKey(s) { return cleanText(s).replace(/\s+/g, "").toUpperCase(); }
+function normalizeFormat(s) {
+  s = cleanText(s);
+  if (!s) return "";
+  return s.split(",").map(function (t) { return t.trim(); }).join(",");
+}
+function formatError(fmt) {
+  if (!fmt) return "QRの中身が空です";
+  var t = fmt.split(","), nN = 0, nH = 0, nQ = 0;
+  for (var i = 0; i < t.length; i++) {
+    if (t[i] === "納品番号") nN++;
+    else if (t[i] === "品番") nH++;
+    else if (t[i] === "入数") nQ++;
+    else if (t[i] !== "読まない") return "「" + t[i] + "」は使えません。納品番号・品番・入数・読まない のどれかにしてください";
+  }
+  if (nN !== 1 || nQ !== 1) return "納品番号と入数を1つずつ入れてください";
+  if (nH > 1) return "品番は1つだけにしてください";
+  return "";
+}
+function isQty(s) { return /^[0-9]{1,9}$/.test(String(s).trim()); }
+function toInt(s) {
+  s = cleanText(s).replace(/,/g, "");
+  return /^-?[0-9]+(\.0+)?$/.test(s) ? parseInt(s, 10) : NaN;
+}
+function newId() {
+  return (S.device || "dev") + "-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+}
+function addRecent(list, v) {
+  if (!v) return;
+  var i = list.indexOf(v);
+  if (i >= 0) list.splice(i, 1);
+  list.unshift(v);
+  if (list.length > 12) list.length = 12;
+}
+function fmtNum(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ","); }
+
+/* ---------------- 出荷リスト ---------------- */
+// 納品番号 → 出荷リストの行（同じ納品番号が何行かあれば、納品数を足してまとめる）
+function listIndex() {
+  var idx = {};
+  if (!L) return idx;
+  L.rows.forEach(function (r, i) {
+    var k = normKey(r.nohin);
+    if (!k) return;
+    var g = idx[k] || (idx[k] = { key: k, nohin: r.nohin, rows: [], qty: 0, labels: 0, order: i });
+    g.rows.push(r);
+    g.qty += r.qty > 0 ? r.qty : 0;
+    g.labels += r.labels > 0 ? r.labels : 0;
+  });
+  return idx;
+}
+function groupHinban(g) {
+  var a = [];
+  g.rows.forEach(function (r) { if (r.hinban && a.indexOf(r.hinban) < 0) a.push(r.hinban); });
+  return a;
+}
+function masterOf(hinban) {
+  if (!L || !hinban) return null;
+  return L.master[normKey(hinban)] || null;
+}
+
+/* ---------------- 読み取り ---------------- */
+// 社内ラベルのQRとして読めるか。読めれば {nohin, hinban, qty}
+function parseLabel(raw) {
+  var fmt = normalizeFormat(S.qrFmt);
+  if (formatError(fmt)) return null;
+  var toks = fmt.split(","), parts = raw.split(",").map(function (p) { return p.trim(); });
+  if (parts.length !== toks.length) return null;
+  var r = { nohin: "", hinban: "", qty: "" };
+  toks.forEach(function (t, i) {
+    if (t === "納品番号") r.nohin = parts[i];
+    else if (t === "品番") r.hinban = parts[i];
+    else if (t === "入数") r.qty = parts[i];
+  });
+  if (!r.nohin || !isQty(r.qty)) return null;
+  r.qty = parseInt(r.qty, 10);
+  return r;
+}
+// かんばんから納品番号を取り出す（「入っていればOK」のときは null）
+function kanbanValue(raw) {
+  var k = S.kb;
+  if (k.mode === "whole") return raw;
+  if (k.mode === "pos") return raw.substr(k.start - 1, k.len);
+  if (k.mode === "delim") {
+    var p = raw.split(k.delim);
+    return p.length >= k.index ? p[k.index - 1] : "";
+  }
+  return null;
+}
+function kanbanMatches(raw, nohin) {
+  var n = normKey(nohin);
+  if (!n) return false;
+  var v = kanbanValue(raw);
+  if (v !== null) return normKey(v) === n;
+  var nr = normKey(raw);
+  if (nr.indexOf(n) < 0) return false;
+  // 出荷リストのほかの、もっと長い納品番号がかんばんに入っていれば、そちらのかんばん（例：「123」のかんばんに「12」も入っている）
+  var idx = listIndex();
+  return !Object.keys(idx).some(function (k) { return k !== n && k.length > n.length && nr.indexOf(k) >= 0; });
+}
+// 「入っていればOK」で使うには納品番号が短すぎるか（短いと、ほかの番号の一部と重なりやすい）
+function shortNohinWarning() {
+  if (S.kb.mode !== "contains" || !L) return "";
+  var short = Object.keys(listIndex()).filter(function (k) { return k.length < 6; });
+  if (!short.length) return "";
+  return "出荷リストに短い納品番号（" + short.slice(0, 5).join("・") + (short.length > 5 ? " など" : "") + "）があります。" +
+    "「入っていればOK」では、ほかの番号の一部と重なって誤品を見逃すことがあります。かんばんの中身がわかったら「決まった位置から取り出す」か「区切り文字で分けて取り出す」に変えてください。";
+}
+// かんばんだけを読んだとき、出荷リストのどの行かを探す（画面に出すため）
+function kanbanLookup(raw) {
+  var idx = listIndex(), v = kanbanValue(raw);
+  if (v !== null) return { value: v, group: idx[normKey(v)] || null };
+  var best = null, nr = normKey(raw);
+  Object.keys(idx).forEach(function (k) {
+    if (nr.indexOf(k) >= 0 && (!best || k.length > best.key.length)) best = idx[k];
+  });
+  return { value: best ? best.nohin : "", group: best };
+}
+
+function processScan(raw, source) {
+  raw = cleanText(raw);
+  if (!raw) return;
+  if (!S.tanto.trim()) { setResult("ng", "NG　作業者を入れてから読んでください", "記録していません　読んだ内容：" + raw); beep("ng"); return; }
+  if (!L || !L.rows.length) { setResult("ng", "NG　出荷リストが入っていません", "設定 →「出荷リストを取り込む」で、パソコンから送った出荷リストを入れてください"); beep("ng"); return; }
+  var lab = parseLabel(raw), how = source === "camera" ? "カメラ" : "スキャナ";
+  var cur = { type: lab ? "label" : "kanban", raw: raw, t: nowText() };
+  if (lab) { cur.nohin = lab.nohin; cur.hinban = lab.hinban; cur.qty = lab.qty; }
+  var p = S.pend;
+  if (!p || p.type === cur.type) {
+    // 1つ目（または同じ種類を読み直した）
+    var again = !!p;
+    S.pend = cur; saveAll();
+    if (cur.type === "kanban") {
+      var lk = kanbanLookup(raw);
+      setResult("wait", (again ? "かんばんを読み直しました" : "かんばん OK") + "　→ 次に社内ラベルを読んでください",
+        (lk.group ? "出荷リスト No." + lk.group.rows[0].no + "　納品番号 " + lk.group.nohin + "　" + groupHinban(lk.group).join("・") :
+          "（このかんばんの納品番号は出荷リストに見つかりません）") + "　" + how);
+    } else {
+      setResult("wait", (again ? "社内ラベルを読み直しました" : "社内ラベル OK") + "　→ 次にかんばんを読んでください",
+        "納品番号 " + cur.nohin + "　品番 " + (cur.hinban || "-") + "　入数 " + cur.qty + "　" + how);
+    }
+    beep("step");
+    renderSteps();
+    return;
+  }
+  // 2つそろった → 照合
+  var kb = cur.type === "kanban" ? cur : p, lb = cur.type === "label" ? cur : p;
+  S.pend = null;
+  finishPair(kb, lb, how);
+}
+
+function finishPair(kb, lb, how) {
+  S.seq += 1;
+  var rec = { id: newId(), no: S.seq, t: nowText(), tanto: S.tanto.trim(), device: S.device.trim(), list: L ? L.name : "",
+    result: "OK", warn: "", nohin: lb.nohin, hinban: lb.hinban || "", qty: lb.qty, kbRaw: kb.raw, lbRaw: lb.raw, cancel: "", cancelT: "" };
+  if (!kanbanMatches(kb.raw, lb.nohin)) {
+    var v = kanbanValue(kb.raw);
+    rec.result = "NG";
+    rec.warn = "誤品：かんばんと社内ラベルの納品番号が違う";
+    R.push(rec); saveAll();
+    setResult("ng", "NG　誤品です（納品番号が違います）",
+      "かんばん：" + (v === null ? kb.raw : (v || "（取り出せません）") + "　（読んだ内容 " + kb.raw + "）") +
+      "　／　社内ラベル：" + lb.nohin + "　この箱は数に入れていません。正しい組み合わせを読み直してください");
+    beep("ng");
+    renderSteps(); renderRecent();
+    return;
+  }
+  var idx = listIndex(), g = idx[normKey(rec.nohin)], warns = [];
+  if (!g) {
+    warns.push("リスト外（出荷リストにない納品番号）");
+  } else {
+    var hs = groupHinban(g);
+    if (rec.hinban && hs.length && !hs.some(function (h) { return normKey(h) === normKey(rec.hinban); }))
+      warns.push("品番がリストと違う（リスト：" + hs.join("・") + "）");
+    var sum = sumFor(rec.nohin) + rec.qty;
+    if (sum > g.qty) warns.push("数量オーバー（納品数 " + fmtNum(g.qty) + "、読んだ合計 " + fmtNum(sum) + "）");
+  }
+  rec.warn = warns.join("／");
+  R.push(rec); saveAll();
+  showPairResult(rec, g);
+  beep(warns.length ? "warn" : "ok");
+  renderSteps(); renderRecent();
+}
+// 納品番号ごとの、読んだ入数の合計（取り消し・NG は入れない）
+function sumFor(nohin) {
+  var k = normKey(nohin), s = 0;
+  R.forEach(function (r) { if (r.result === "OK" && !r.cancel && normKey(r.nohin) === k) s += r.qty; });
+  return s;
+}
+function boxesFor(nohin) {
+  var k = normKey(nohin), n = 0;
+  R.forEach(function (r) { if (r.result === "OK" && !r.cancel && normKey(r.nohin) === k) n++; });
+  return n;
+}
+function showPairResult(rec, g) {
+  var hin = rec.hinban || (g ? groupHinban(g).join("・") : "");
+  var row = g ? g.rows[0] : null, m = masterOf(hin);
+  var kishu = row && row.kishu ? row.kishu : (m ? m.kishu : ""), iri = row && row.irisu ? row.irisu : (m ? m.irisu : "");
+  var sum = sumFor(rec.nohin), boxes = boxesFor(rec.nohin);
+  var kv = '<div class="kv">' +
+    '<span>品番</span><b>' + esc(hin || "-") + '</b>' +
+    (row && row.hinmei ? '<span>品名</span><span>' + esc(row.hinmei) + '</span>' : "") +
+    '<span>機種</span><span>' + esc(kishu || "-") + '</span>' +
+    '<span>通函最大入り数</span><span>' + esc(iri || "-") + '</span>' +
+    '<span>この箱の入数</span><b>' + fmtNum(rec.qty) + '</b>' +
+    (g ? '<span>この納品番号</span><b>' + fmtNum(sum) + ' / ' + fmtNum(g.qty) + '　（' + boxes + (g.labels ? ' / ' + g.labels : "") + ' 箱）</b>' :
+      '<span>この納品番号</span><b>' + fmtNum(sum) + '（' + boxes + ' 箱）</b>') +
+    '</div>';
+  var head;
+  if (rec.warn) head = "注意　No." + rec.no + "　" + rec.warn;
+  else if (g && sum === g.qty) head = "OK　No." + rec.no + "　納品番号 " + rec.nohin + " がそろいました";
+  else head = "OK　No." + rec.no + "　納品番号 " + rec.nohin;
+  lastResult = { cls: rec.warn ? "warn" : "ok", html: '<span class="big">' + esc(head) + '</span>' + kv +
+    (rec.warn ? '<small style="margin-top:6px">記録しました。出荷リストが古いことがあるので、パソコンで確かめてください。</small>' : "") };
+  showResult(true);
+}
+function setResult(cls, text, sub) {
+  lastResult = { cls: cls, html: esc(text) + (sub ? "<small>" + esc(sub) + "</small>" : "") };
+  showResult(true);
+}
+
+/* ---------------- 音 ---------------- */
+var audioCtx = null;
+function unlockAudio() {
+  if (audioCtx) return;
+  try {
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (AC) audioCtx = new AC();
+  } catch (e) { audioCtx = null; }
+}
+function beep(kind) {
+  var seqs = {
+    step: [[990, 0, 0.06, "sine", 0.2]],
+    ok: [[1320, 0, 0.09, "sine", 0.25], [1760, 0.11, 0.12, "sine", 0.25]],
+    warn: [[880, 0, 0.12, "triangle", 0.3], [880, 0.18, 0.12, "triangle", 0.3], [880, 0.36, 0.12, "triangle", 0.3]],
+    ng: [[330, 0, 0.18, "square", 0.12], [260, 0.22, 0.4, "square", 0.12]]
+  };
+  if (S.sound && audioCtx) {
+    try {
+      if (audioCtx.state === "suspended") audioCtx.resume();
+      (seqs[kind] || seqs.ok).forEach(function (p) {
+        var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        o.type = p[3]; o.frequency.value = p[0]; g.gain.value = p[4];
+        o.connect(g); g.connect(audioCtx.destination);
+        var t = audioCtx.currentTime + p[1];
+        o.start(t); o.stop(t + p[2]);
+      });
+    } catch (e) { }
+  }
+  var vib = { step: 40, ok: 60, warn: [80, 60, 80, 60, 80], ng: [200, 100, 200] };
+  if (navigator.vibrate) { try { navigator.vibrate(vib[kind] || 60); } catch (e) { } }
+}
+document.addEventListener("touchend", unlockAudio, { passive: true });
+document.addEventListener("click", unlockAudio);
+
+/* ---------------- カメラ ---------------- */
+var cam = { stream: null, video: null, canvas: null, ctx: null, timer: 0, lastText: "", lastSeen: 0, devices: [], autoTried: false, flip: 0 };
+// カメラの名前で、背面（画面と反対側）か前面かを見分ける（Windows タブレットは向きを教えてくれないことが多いため）
+var REAR_RE = /back|rear|environment|world|背面|リア|外側/i;
+function cameraConstraints() {
+  // 長い納品番号のバーコードは線が細かいので、高めの解像度をお願いする
+  var v = { width: { ideal: 1920 }, height: { ideal: 1080 } };
+  if (S.camId) v.deviceId = { exact: S.camId };      // 前に選んだカメラ
+  else v.facingMode = { ideal: "environment" };      // 背面をお願いする（iPhone・Android はこれで背面になる）
+  return { video: v, audio: false };
+}
+function startCamera() {
+  if (cam.stream) return;
+  var msgEl = document.getElementById("camMsg");
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    alert("この画面ではカメラを使えません。\nホーム画面のアイコンから開いているか、https の住所で開いているかを確かめてください。\nカメラが使えないときは「スキャナ」に切り替えて読んでください。");
+    return;
+  }
+  document.getElementById("camBox").classList.remove("hidden");
+  document.getElementById("camBtn").textContent = "カメラを止める";
+  if (msgEl) msgEl.textContent = "カメラを準備しています…";
+  cam.autoTried = false;
+  openStream(cameraConstraints(), true);
+}
+function openStream(constraints, allowRetry) {
+  navigator.mediaDevices.getUserMedia(constraints)
+    .then(function (stream) {
+      if (!document.getElementById("camBox") || document.getElementById("camBox").classList.contains("hidden")) {
+        stream.getTracks().forEach(function (t) { t.stop(); });   // 準備中に止められた
+        return;
+      }
+      cam.stream = stream;
+      cam.video = document.getElementById("video");
+      cam.video.setAttribute("playsinline", "");
+      cam.video.muted = true;
+      cam.video.srcObject = stream;
+      var p = cam.video.play(); if (p && p.catch) p.catch(function () { });
+      cam.canvas = cam.canvas || document.createElement("canvas");
+      cam.ctx = cam.canvas.getContext("2d", { willReadFrequently: true }) || cam.canvas.getContext("2d");
+      var label = trackLabel(stream);
+      listCameras(function () {
+        // まだカメラを選んでいなくて、2台以上あり、今のカメラが背面らしくなければ、背面らしいカメラに切り替える
+        if (!S.camId && !cam.autoTried && cam.devices.length > 1 && !REAR_RE.test(label)) {
+          cam.autoTried = true;
+          var rear = cam.devices.filter(function (d) { return REAR_RE.test(d.label); })[0];
+          if (rear) { switchCamera(rear.deviceId); return; }
+        }
+        updateCamUi(label);
+      });
+      clearTimeout(cam.timer);
+      cam.timer = setTimeout(camLoop, 300);
+    })
+    .catch(function (e) {
+      // 前に選んだカメラが無くなっていたら、選び直す
+      if (allowRetry && S.camId) { S.camId = ""; saveAll(); openStream(cameraConstraints(), false); return; }
+      stopCamera();
+      alert("カメラを使えませんでした（" + (e && e.name ? e.name : e) + "）。\n" + (IS_ANDROID ?
+        "Chrome のアドレス欄の左のマーク →「権限」→ カメラ を「許可」にしてください。\n（または 設定 → アプリ → Chrome → 権限 → カメラ）" :
+        IS_WINDOWS ?
+        "Edge のアドレス欄の左のマーク → カメラ を「許可」にしてください。\nまた、Windows の 設定 → プライバシーとセキュリティ → カメラ で、カメラへのアクセスを「オン」にしてください。" :
+        "設定 → アプリ → Safari → カメラ を「許可」にしてください。"));
+    });
+}
+function trackLabel(stream) {
+  var t = stream && stream.getVideoTracks()[0];
+  return t ? (t.label || "") : "";
+}
+function currentCameraId() {
+  var t = cam.stream && cam.stream.getVideoTracks()[0];
+  var s = t && t.getSettings ? t.getSettings() : {};
+  return s.deviceId || "";
+}
+function listCameras(cb) {
+  if (!navigator.mediaDevices.enumerateDevices) { cam.devices = []; cb(); return; }
+  navigator.mediaDevices.enumerateDevices().then(function (list) {
+    cam.devices = list.filter(function (d) { return d.kind === "videoinput"; });
+    cb();
+  }).catch(function () { cam.devices = []; cb(); });
+}
+// 指定したカメラに切り替えて、そのカメラを覚えておく
+function switchCamera(id) {
+  clearTimeout(cam.timer); cam.timer = 0;
+  if (cam.stream) cam.stream.getTracks().forEach(function (t) { t.stop(); });
+  cam.stream = null;
+  S.camId = id; saveAll();
+  var msgEl = document.getElementById("camMsg");
+  if (msgEl) msgEl.textContent = "カメラを切り替えています…";
+  openStream(cameraConstraints(), true);
+}
+// 「カメラを切り替え」ボタン：次のカメラへ
+function nextCamera() {
+  if (cam.devices.length < 2) return;
+  var cur = S.camId || currentCameraId(), i = -1;
+  cam.devices.forEach(function (d, k) { if (d.deviceId === cur) i = k; });
+  switchCamera(cam.devices[(i + 1) % cam.devices.length].deviceId);
+}
+function updateCamUi(label) {
+  var msgEl = document.getElementById("camMsg"), sw = document.getElementById("camSwitch");
+  if (msgEl) msgEl.textContent = "枠の中にバーコード・QRを入れてください" + (label ? "（" + label.replace(/\s*\([0-9a-f]{4}:[0-9a-f]{4}\)\s*$/i, "") + "）" : "");
+  if (sw) sw.classList.toggle("hidden", cam.devices.length < 2);
+}
+function stopCamera() {
+  clearTimeout(cam.timer); cam.timer = 0;
+  if (cam.stream) { cam.stream.getTracks().forEach(function (t) { t.stop(); }); }
+  cam.stream = null;
+  var box = document.getElementById("camBox"), btn = document.getElementById("camBtn");
+  if (box) box.classList.add("hidden");
+  if (btn) btn.textContent = "カメラで読む";
+}
+function camLoop() {
+  if (!cam.stream) return;
+  var v = cam.video;
+  try {
+    if (v && v.readyState >= 2 && v.videoWidth) {
+      var text = readFrame(v, v.videoWidth, v.videoHeight), now = Date.now();
+      if (text) {
+        // 同じものを写し続けている間は、1回だけ読む（いったん外せば同じものでもまた読める）
+        if (text === cam.lastText && now - cam.lastSeen < 1500) {
+          cam.lastSeen = now;
+        } else {
+          cam.lastText = text; cam.lastSeen = now;
+          processScan(text, "camera");
+        }
+      }
+    }
+  } catch (e) { }
+  cam.timer = setTimeout(camLoop, 100);
+}
+// 画面（video か canvas）の枠の中から、QR（jsQR）とバーコード（ZXing）を探す。見つからなければ ""
+function readFrame(src, w, h) {
+  var c = cam.canvas || (cam.canvas = document.createElement("canvas"));
+  var ctx = cam.ctx || (cam.ctx = c.getContext("2d", { willReadFrequently: true }) || c.getContext("2d"));
+  // QR：中央の正方形を縮小して調べる
+  var side = Math.min(w, h) * 0.8, sx = (w - side) / 2, sy = (h - side) / 2;
+  var size = Math.min(560, Math.round(side));
+  c.width = size; c.height = size;
+  ctx.drawImage(src, sx, sy, side, side, 0, 0, size, size);
+  var img = ctx.getImageData(0, 0, size, size);
+  var code = window.jsQR ? jsQR(img.data, size, size, { inversionAttempts: "dontInvert" }) : null;
+  if (code) return decodeQr(code);
+  // バーコード：横長の帯（枠と同じ 幅86%・高さ56%）を調べる。1回おきに縦向きも試す
+  cam.flip = (cam.flip + 1) % 2;
+  var bw = w * 0.86, bh = h * 0.56, bx = (w - bw) / 2, by = (h - bh) / 2;
+  var scale = Math.min(1, 1600 / bw), cw = Math.round(bw * scale), ch = Math.round(bh * scale);
+  if (cam.flip === 1 && h > 0) {
+    // 縦に貼ったバーコード用に 90度回して調べる
+    c.width = ch; c.height = cw;
+    ctx.save(); ctx.translate(ch, 0); ctx.rotate(Math.PI / 2);
+    ctx.drawImage(src, bx, by, bw, bh, 0, 0, cw, ch);
+    ctx.restore();
+    return decode1D(ctx.getImageData(0, 0, ch, cw), ch, cw);
+  }
+  c.width = cw; c.height = ch;
+  ctx.drawImage(src, bx, by, bw, bh, 0, 0, cw, ch);
+  return decode1D(ctx.getImageData(0, 0, cw, ch), cw, ch);
+}
+var zx = null;
+function decode1D(img, w, h) {
+  if (!window.ZXing) return "";
+  try {
+    if (!zx) {
+      var Z = window.ZXing, F = Z.BarcodeFormat, hints = new Map();
+      hints.set(Z.DecodeHintType.POSSIBLE_FORMATS, [F.CODE_39, F.CODE_128, F.CODE_93, F.CODABAR, F.ITF, F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E]);
+      hints.set(Z.DecodeHintType.TRY_HARDER, true);
+      zx = new Z.MultiFormatReader();
+      zx.setHints(hints);
+    }
+    var d = img.data, lum = new Uint8ClampedArray(w * h);
+    for (var i = 0, j = 0; i < lum.length; i++, j += 4) lum[i] = (d[j] * 77 + d[j + 1] * 150 + d[j + 2] * 29) >> 8;
+    var bmp = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(new ZXing.RGBLuminanceSource(lum, w, h)));
+    var res = zx.decodeWithState(bmp);
+    return res ? res.getText() : "";
+  } catch (e) {
+    return "";
+  }
+}
+// UTF-8 として読めなければ Shift-JIS として読む（Excel のQR作成ツールは Shift-JIS が既定）
+function decodeQr(code) {
+  try {
+    if (code.binaryData && code.binaryData.length && window.TextDecoder) {
+      var bytes = new Uint8Array(code.binaryData);
+      try { return new TextDecoder("utf-8", { fatal: true }).decode(bytes); }
+      catch (e) { return new TextDecoder("shift_jis").decode(bytes); }
+    }
+  } catch (e) { }
+  return code.data || "";
+}
+document.addEventListener("visibilitychange", function () { if (document.hidden) stopCamera(); });
+
+/* ---------------- 画面：読取 ---------------- */
+function renderScan() {
+  var banner = "";
+  if (saveError) banner += '<div class="banner">' + esc(saveError) + '</div>';
+  if (!L) banner += '<div class="banner">出荷リストが入っていません。設定 →「出荷リストを取り込む」で入れてください。</div>';
+  else if (shortNohinWarning()) banner += '<div class="banner">納品番号が短いので、設定の「納入かんばんの読み方」を確かめてください（誤品を見逃さないため）。</div>';
+  var cnt = L ? Object.keys(listIndex()).length : 0;
+  return banner +
+    '<h1>2点照合</h1>' +
+    '<div class="scan-grid"><div>' +
+    '<div class="card"><div class="info">' +
+    '<button id="btnTanto" class="' + (S.tanto ? "" : "empty") + '"><small>作業者</small><b>' + esc(S.tanto || "未入力（タップ）") + '</b></button>' +
+    '<button id="btnList" class="' + (L ? "" : "empty") + '"><small>出荷リスト' + (L ? "（" + cnt + " 件）" : "") + '</small><b>' + esc(L ? L.name : "なし（タップ）") + '</b></button>' +
+    '</div></div>' +
+    '<div class="card"><div class="steps" id="steps"></div>' +
+    '<button id="pendClr" class="btn small block hidden" style="margin-top:8px">読んだ1つ目をやめる（読み直す）</button></div>' +
+    '<div id="result" class="result"></div>' +
+    '</div><div>' +
+    '<div class="card">' +
+    '<div class="seg" id="inSeg"><button data-in="camera"' + (S.input === "camera" ? ' class="sel"' : "") + '>カメラ</button>' +
+    '<button data-in="scanner"' + (S.input === "scanner" ? ' class="sel"' : "") + '>スキャナ</button></div>' +
+    (S.input === "camera" ?
+      '<button id="camBtn" class="btn primary block" style="min-height:60px;font-size:19px">カメラで読む</button>' +
+      '<div id="camBox" class="hidden" style="margin-top:10px"><div class="cam"><video id="video" playsinline muted autoplay></video>' +
+      '<div class="frame"></div><div class="camMsg" id="camMsg"></div></div>' +
+      '<button id="camSwitch" class="btn small block hidden" style="margin-top:8px">⇄ カメラを切り替え（前面／背面）</button></div>' :
+      '<div class="muted">スキャナ（Bluetooth・USB）で読みます。青い欄が選ばれていないときはタップしてください。</div>' +
+      '<input id="scanInput" class="input scan-input" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" placeholder="ここでスキャナを読む">') +
+    '</div>' +
+    '<div class="card"><div class="row"><b class="grow">最近の記録</b><span class="muted" id="recCount"></span></div><div id="recent" style="margin-top:8px"></div></div>' +
+    '</div></div>';
+}
+function bindScan() {
+  document.getElementById("btnTanto").onclick = editTanto;
+  document.getElementById("btnList").onclick = function () {
+    if (L) { tab = "prog"; render(); window.scrollTo(0, 0); } else importListFile();
+  };
+  document.getElementById("pendClr").onclick = function () {
+    S.pend = null; saveAll();
+    setResult("", "1つ目をやめました。かんばんか社内ラベルを読んでください", "");
+    renderSteps();
+  };
+  Array.prototype.forEach.call(document.querySelectorAll("[data-in]"), function (b) {
+    b.onclick = function () { S.input = b.getAttribute("data-in"); saveAll(); render(); };
+  });
+  if (S.input === "camera") {
+    document.getElementById("camBtn").onclick = function () { if (cam.stream || !document.getElementById("camBox").classList.contains("hidden")) stopCamera(); else startCamera(); };
+    document.getElementById("camSwitch").onclick = nextCamera;
+  } else {
+    var inp = document.getElementById("scanInput");
+    inp.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.keyCode === 13 || e.key === "Tab") {
+        e.preventDefault();
+        var v = inp.value; inp.value = "";
+        processScan(v, "scanner");
+      }
+    });
+    setTimeout(function () { if (!document.getElementById("modalRoot").innerHTML) inp.focus(); }, 50);
+  }
+  showResult(false);
+  renderSteps();
+  renderRecent();
+}
+function renderSteps() {
+  var el = document.getElementById("steps");
+  if (!el) return;
+  var p = S.pend;
+  var box = function (type, title) {
+    var has = p && p.type === type, next = p && p.type !== type;
+    var val = !has ? (next ? "次にこれを読む" : "待ち") :
+      type === "kanban" ? (function () { var v = kanbanValue(p.raw); return v === null ? p.raw : v; })() :
+      p.nohin + "　" + (p.hinban || "") + "　" + p.qty;
+    return '<div class="step' + (has ? " done" : next ? " next" : "") + '"><div class="lbl">' + title + (has ? "　✓ 読みました" : "") + '</div><div class="val">' + esc(val) + '</div></div>';
+  };
+  el.innerHTML = box("kanban", "① かんばん") + box("label", "② 社内ラベル");
+  var b = document.getElementById("pendClr");
+  if (b) b.classList.toggle("hidden", !p);
+}
+function showResult(flash) {
+  var el = document.getElementById("result");
+  if (!el) return;
+  if (!lastResult) {
+    el.className = "result";
+    el.innerHTML = !S.tanto ? "まず作業者を入れてください" : !L ? "出荷リストを入れてください" : "かんばんと社内ラベルを読んでください（どちらが先でもよい）";
+    return;
+  }
+  el.className = "result" + (lastResult.cls ? " " + lastResult.cls : "");
+  el.innerHTML = lastResult.html;
+  if (flash) { el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash"); }
+}
+function renderRecent() {
+  var el = document.getElementById("recent");
+  if (!el) return;
+  var list = R.slice(-3).reverse();
+  el.innerHTML = list.length ? list.map(recHtml).join("") : '<div class="muted">まだありません</div>';
+  bindRecButtons(el);
+  var c = document.getElementById("recCount"); if (c) c.textContent = R.length + "件";
+}
+function editTanto() {
+  openModal('<h2 style="margin-top:0">作業者</h2>' +
+    '<input id="pv" class="input" type="text" autocomplete="off" value="' + esc(S.tanto) + '" placeholder="作業者の名前">' +
+    (S.tantos.length ? '<div class="muted" style="margin-top:10px">最近使った名前</div><div class="chips">' +
+      S.tantos.map(function (v) { return '<button class="chip" data-v="' + esc(v) + '">' + esc(v) + '</button>'; }).join("") + '</div>' : "") +
+    '<div class="row" style="margin-top:14px"><button class="btn grow" id="pc">やめる</button><button class="btn primary grow" id="po">決定</button></div>',
+    function (m) {
+      var inp = m.querySelector("#pv");
+      Array.prototype.forEach.call(m.querySelectorAll("[data-v]"), function (b) {
+        b.onclick = function () { inp.value = b.getAttribute("data-v"); };
+      });
+      m.querySelector("#pc").onclick = function () { closeModal(); render(); };
+      m.querySelector("#po").onclick = function () {
+        S.tanto = inp.value.trim();
+        addRecent(S.tantos, S.tanto);
+        saveAll(); closeModal(); render();
+      };
+      setTimeout(function () { inp.focus(); }, 50);
+    });
+}
+
+/* ---------------- 記録の表示・取り消し ---------------- */
+function recClass(r) { return r.cancel ? "cancel" : r.result === "NG" ? "ng" : r.warn ? "warn" : ""; }
+function recHtml(r) {
+  var tag = r.cancel ? '<span class="tag">取消</span>' : r.result === "NG" ? '<span class="tag ng">NG</span>' :
+    r.warn ? '<span class="tag warn">注意</span>' : '<span class="tag ok">OK</span>';
+  return '<button class="rec ' + recClass(r) + '" data-id="' + esc(r.id) + '">' +
+    '<div class="no">No.' + esc(r.no) + '</div>' +
+    '<div class="main"><div>' + tag + '<span class="tag">納品番号 ' + esc(r.nohin) + '</span></div>' +
+    '<div class="hin">' + esc(r.hinban || "（品番なし）") + '</div>' +
+    (r.warn ? '<div class="msg">' + esc(r.warn) + '</div>' : "") +
+    '<div class="meta">' + esc(r.t) + '　' + esc(r.tanto || "") + (r.device ? '　[' + esc(r.device) + ']' : "") +
+    (r.cancel ? '　取消 ' + esc(r.cancelT) : "") + '</div></div>' +
+    '<div class="qty">' + esc(r.qty) + '</div></button>';
+}
+function bindRecButtons(root) {
+  Array.prototype.forEach.call(root.querySelectorAll("[data-id]"), function (b) {
+    b.onclick = function () { showRecord(b.getAttribute("data-id")); };
+  });
+}
+function findRec(id) { for (var i = 0; i < R.length; i++) if (R[i].id === id) return i; return -1; }
+function showRecord(id) {
+  var i = findRec(id);
+  if (i < 0) return;
+  var r = R[i];
+  openModal('<h2 style="margin-top:0">No.' + esc(r.no) + '　' + (r.cancel ? "取消" : esc(r.result)) + '</h2>' +
+    '<div class="card">' +
+    '<div>日時：' + esc(r.t) + '</div><div>作業者：' + esc(r.tanto) + (r.device ? '　端末：' + esc(r.device) : "") + '</div>' +
+    '<div>納品番号：<b>' + esc(r.nohin) + '</b>　品番：<b>' + esc(r.hinban || "-") + '</b>　入数：<b>' + esc(r.qty) + '</b></div>' +
+    (r.warn ? '<div class="errtxt">' + esc(r.warn) + '</div>' : "") +
+    '<div class="muted" style="margin-top:6px">かんばん（読んだ内容）：' + esc(r.kbRaw) + '</div>' +
+    '<div class="muted">社内ラベル（読んだ内容）：' + esc(r.lbRaw) + '</div>' +
+    '<div class="muted">出荷リスト：' + esc(r.list || "-") + '</div>' +
+    (r.cancel ? '<div class="muted">取消：' + esc(r.cancelT) + '（' + esc(r.cancel) + '）</div>' : "") +
+    '</div>' +
+    (r.cancel ? '<button class="btn block" id="ru">取り消しをやめる（元に戻す）</button>' :
+      '<button class="btn danger block" id="rd">この記録を取り消す（数に入れない）</button>' +
+      '<div class="muted" style="margin-top:6px">読み間違えたときに使います。記録は消さずに「取消」として残ります。</div>') +
+    '<button class="btn block" id="rc" style="margin-top:12px">閉じる</button>',
+    function (m) {
+      m.querySelector("#rc").onclick = function () { closeModal(); render(); };
+      var d = m.querySelector("#rd"), u = m.querySelector("#ru");
+      if (d) d.onclick = function () {
+        if (!confirm("No." + r.no + "（納品番号 " + r.nohin + "　入数 " + r.qty + "）を取り消しますか？")) return;
+        r.cancel = S.tanto.trim() || "取消"; r.cancelT = nowText();
+        lastResult = { cls: "", html: esc("No." + r.no + " を取り消しました") };
+        saveAll(); closeModal(); render();
+      };
+      if (u) u.onclick = function () {
+        r.cancel = ""; r.cancelT = "";
+        saveAll(); closeModal(); render();
+      };
+    });
+}
+
+/* ---------------- 画面：記録 ---------------- */
+function renderList() {
+  var n = { ng: 0, warn: 0, cancel: 0 };
+  R.forEach(function (r) { if (r.cancel) n.cancel++; else if (r.result === "NG") n.ng++; else if (r.warn) n.warn++; });
+  var chip = function (f, label) { return '<button class="chip' + (listFilter === f ? " sel" : "") + '" data-f="' + f + '">' + label + '</button>'; };
+  return '<h1>記録（' + R.length + '件）</h1>' +
+    '<div class="muted">行をタップすると、くわしい内容を見たり、取り消したりできます。新しい記録が上です。</div>' +
+    '<div class="chips">' + chip("", "すべて") + (n.ng ? chip("ng", "NG " + n.ng) : "") + (n.warn ? chip("warn", "注意 " + n.warn) : "") +
+    (n.cancel ? chip("cancel", "取消 " + n.cancel) : "") + '</div>' +
+    '<input id="q" class="input" type="search" placeholder="納品番号・品番でさがす" autocomplete="off" autocapitalize="off" autocorrect="off" style="margin-bottom:10px">' +
+    '<div id="listBody"></div>';
+}
+function bindList() {
+  Array.prototype.forEach.call(document.querySelectorAll("[data-f]"), function (b) {
+    b.onclick = function () { listFilter = b.getAttribute("data-f"); render(); };
+  });
+  document.getElementById("q").oninput = drawList;
+  drawList();
+}
+function drawList() {
+  var q = normKey(document.getElementById("q").value);
+  var list = R.filter(function (r) {
+    if (listFilter === "ng" && (r.cancel || r.result !== "NG")) return false;
+    if (listFilter === "warn" && (r.cancel || r.result === "NG" || !r.warn)) return false;
+    if (listFilter === "cancel" && !r.cancel) return false;
+    if (q && normKey(r.hinban).indexOf(q) < 0 && normKey(r.nohin).indexOf(q) < 0) return false;
+    return true;
+  }).reverse();
+  var shown = list.slice(0, 300);
+  var el = document.getElementById("listBody");
+  el.innerHTML = shown.length ? shown.map(recHtml).join("") +
+    (list.length > shown.length ? '<div class="muted">ほか ' + (list.length - shown.length) + ' 件（さがす欄でしぼってください）</div>' : "")
+    : '<div class="muted">記録がありません</div>';
+  bindRecButtons(el);
+}
+
+/* ---------------- 照合状況 ---------------- */
+// 出荷リストの納品番号ごとに、読んだ数量・箱数・状態をまとめる。リスト外の納品番号も別にまとめる
+function buildProgress() {
+  var idx = listIndex(), groups = {}, outs = {}, ng = 0;
+  Object.keys(idx).forEach(function (k) {
+    var g = idx[k];
+    groups[k] = { g: g, sum: 0, boxes: 0, hinWarn: 0 };
+  });
+  R.forEach(function (r) {
+    if (r.cancel) return;
+    if (r.result === "NG") { ng++; return; }
+    var k = normKey(r.nohin), x = groups[k];
+    if (x) {
+      x.sum += r.qty; x.boxes++;
+      if (r.warn.indexOf("品番がリストと違う") >= 0) x.hinWarn++;
+    } else {
+      var o = outs[k] || (outs[k] = { nohin: r.nohin, hinban: [], sum: 0, boxes: 0 });
+      o.sum += r.qty; o.boxes++;
+      if (r.hinban && o.hinban.indexOf(r.hinban) < 0) o.hinban.push(r.hinban);
+    }
+  });
+  var rows = Object.keys(groups).map(function (k) {
+    var x = groups[k];
+    x.st = x.sum === 0 ? "none" : x.sum < x.g.qty ? "part" : x.sum === x.g.qty ? "done" : "over";
+    return x;
+  }).sort(function (a, b) { return a.g.order - b.g.order; });
+  var c = { none: 0, part: 0, done: 0, over: 0 };
+  rows.forEach(function (x) { c[x.st]++; });
+  var outList = Object.keys(outs).map(function (k) { return outs[k]; });
+  var hinWarn = rows.filter(function (x) { return x.hinWarn; }).length;
+  return { rows: rows, outs: outList, ng: ng, c: c, hinWarn: hinWarn,
+    allDone: rows.length > 0 && c.done === rows.length && !outList.length && !hinWarn };
+}
+var ST_NAME = { none: "未", part: "不足", done: "完了", over: "超過" };
+function renderProg() {
+  if (!L) return '<h1>照合状況</h1><div class="banner">出荷リストが入っていません。</div><button id="impL" class="btn primary block">出荷リストを取り込む</button>';
+  var p = buildProgress();
+  var chip = function (f, label) { return '<button class="chip' + (progFilter === f ? " sel" : "") + '" data-pf="' + f + '">' + label + '</button>'; };
+  var rows = p.rows.filter(function (x) {
+    if (progFilter === "todo") return x.st === "none" || x.st === "part";
+    if (progFilter === "done") return x.st === "done";
+    if (progFilter === "warn") return x.st === "over" || x.hinWarn;
+    return true;
+  });
+  var html = rows.map(function (x) {
+    var g = x.g, r0 = g.rows[0], hs = groupHinban(g), m = masterOf(hs[0]);
+    var kishu = r0.kishu || (m ? m.kishu : ""), iri = r0.irisu || (m ? m.irisu : "");
+    var pct = g.qty > 0 ? Math.min(100, Math.round(x.sum * 100 / g.qty)) : (x.sum ? 100 : 0);
+    return '<button class="prog s-' + x.st + '" data-nh="' + esc(g.key) + '">' +
+      '<div class="top"><span class="muted">No.' + esc(r0.no) + '</span><span class="nh">' + esc(hs.join("・") || "（品番なし）") + '</span><span class="st">' + ST_NAME[x.st] + '</span></div>' +
+      '<div class="meta">納品番号 ' + esc(g.nohin) + (r0.noki ? '　納期 ' + esc(r0.noki) : "") + (r0.hinmei ? '　' + esc(r0.hinmei) : "") + '</div>' +
+      '<div class="meta">機種 ' + esc(kishu || "-") + '　通函最大入り数 ' + esc(iri || "-") + (r0.biko ? '　備考 ' + esc(r0.biko) : "") + '</div>' +
+      '<div class="nums"><span>数量 <b>' + fmtNum(x.sum) + '</b> / ' + fmtNum(g.qty) + '</span><span>箱 <b>' + x.boxes + '</b>' + (g.labels ? ' / ' + g.labels : "") + '</span>' +
+      (x.sum !== g.qty && x.sum > 0 ? '<span>差 <b>' + (x.sum > g.qty ? "+" : "") + fmtNum(x.sum - g.qty) + '</b></span>' : "") + '</div>' +
+      (g.rows.length > 1 ? '<div class="meta">（出荷リストに同じ納品番号が ' + g.rows.length + ' 行あるので、まとめています）</div>' : "") +
+      (x.hinWarn ? '<div class="warnline">品番がリストと違う箱が ' + x.hinWarn + ' 箱あります</div>' : "") +
+      '<div class="bar"><i style="width:' + pct + '%"></i></div></button>';
+  }).join("");
+  var outHtml = p.outs.map(function (o) {
+    return '<button class="prog s-out" data-nh="' + esc(normKey(o.nohin)) + '">' +
+      '<div class="top"><span class="nh">' + esc(o.hinban.join("・") || "（品番なし）") + '</span><span class="st">リスト外</span></div>' +
+      '<div class="meta">納品番号 ' + esc(o.nohin) + '</div>' +
+      '<div class="nums"><span>数量 <b>' + fmtNum(o.sum) + '</b></span><span>箱 <b>' + o.boxes + '</b></span></div></button>';
+  }).join("");
+  return '<h1>照合状況</h1>' +
+    (p.allDone ? '<div class="done-banner">✓ 出荷リストの全部の納品番号がそろいました</div>' : "") +
+    '<div class="card"><div class="muted" style="margin-bottom:6px">出荷リスト：' + esc(L.name) + '（' + esc(L.loaded) + ' 取り込み）</div>' +
+    '<div class="stats">' +
+    '<div class="stat ok"><b>' + p.c.done + '</b><small>完了</small></div>' +
+    '<div class="stat"><b>' + p.c.part + '</b><small>不足</small></div>' +
+    '<div class="stat"><b>' + p.c.none + '</b><small>未</small></div>' +
+    '<div class="stat' + (p.c.over ? " warn" : "") + '"><b>' + p.c.over + '</b><small>超過</small></div>' +
+    '<div class="stat' + (p.outs.length ? " warn" : "") + '"><b>' + p.outs.length + '</b><small>リスト外</small></div>' +
+    '<div class="stat' + (p.ng ? " ng" : "") + '"><b>' + p.ng + '</b><small>NG（誤品）</small></div>' +
+    '</div>' +
+    '<div class="muted" style="margin-top:8px">この端末の記録だけで数えています。何台かで分けて読んだときは、設定の「ほかの端末の記録を取り込む」で合わせられます。</div></div>' +
+    '<div class="chips">' + chip("", "すべて " + p.rows.length) + chip("todo", "未・不足 " + (p.c.none + p.c.part)) +
+    chip("done", "完了 " + p.c.done) + chip("warn", "超過・品番違い " + (p.c.over + p.hinWarn)) + '</div>' +
+    (html || '<div class="muted">該当する行はありません</div>') +
+    (p.outs.length ? '<h2>リスト外（出荷リストにない納品番号）</h2>' + outHtml : "");
+}
+function bindProg() {
+  var b = document.getElementById("impL");
+  if (b) { b.onclick = importListFile; return; }
+  Array.prototype.forEach.call(document.querySelectorAll("[data-pf]"), function (x) {
+    x.onclick = function () { progFilter = x.getAttribute("data-pf"); render(); };
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-nh]"), function (x) {
+    x.onclick = function () { showGroupRecords(x.getAttribute("data-nh")); };
+  });
+}
+function showGroupRecords(key) {
+  var list = R.filter(function (r) { return normKey(r.nohin) === key; }).reverse();
+  openModal('<h2 style="margin-top:0">納品番号 ' + esc(list.length ? list[list.length - 1].nohin : key) + ' の記録</h2>' +
+    (list.length ? list.map(recHtml).join("") : '<div class="muted">まだ読んでいません</div>') +
+    '<button class="btn block" id="gc" style="margin-top:12px">閉じる</button>',
+    function (m) {
+      m.querySelector("#gc").onclick = closeModal;
+      bindRecButtons(m);
+    });
+}
+
+/* ---------------- CSV 書き出し・取り込み ---------------- */
+function csvCell(v) {
+  v = String(v == null ? "" : v);
+  return /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+}
+function toCsv(rows) { return "﻿" + rows.map(function (r) { return r.map(csvCell).join(","); }).join("\r\n") + "\r\n"; }
+function deviceName() { return (S.device || "端末").replace(/[\\\/:*?"<>|\s]/g, "_"); }
+function exportRecords() {
+  if (!R.length) { alert("記録がありません。"); return; }
+  var rows = [CSV_HEAD].concat(R.map(function (r) {
+    return [r.no, r.t, r.tanto, r.result, r.warn, r.nohin, r.hinban, r.qty, r.kbRaw, r.lbRaw, r.cancel, r.cancelT, r.list, r.device, r.id];
+  }));
+  shareFile("2点照合記録_" + deviceName() + "_" + stamp() + ".csv", toCsv(rows), "text/csv");
+}
+// 共有シート（AirDrop・メール・「ファイル」に保存）で渡す。使えなければダウンロード
+function shareFile(name, text, type) {
+  var blob = new Blob([text], { type: type });
+  var file = null;
+  try { file = new File([blob], name, { type: type }); } catch (e) { file = null; }
+  if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+    navigator.share({ files: [file], title: name }).catch(function (e) {
+      if (e && e.name !== "AbortError") downloadBlob(name, blob);
+    });
+  } else {
+    downloadBlob(name, blob);
+  }
+}
+function downloadBlob(name, blob) {
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+}
+function readTextFile(file, cb) {
+  var fr = new FileReader();
+  fr.onload = function () {
+    var bytes = new Uint8Array(fr.result), text;
+    try { text = new TextDecoder("utf-8", { fatal: true }).decode(bytes); }
+    catch (e) { try { text = new TextDecoder("shift_jis").decode(bytes); } catch (e2) { text = ""; } }
+    cb(text.replace(/^﻿/, ""));
+  };
+  fr.readAsArrayBuffer(file);
+}
+function parseCsv(text) {
+  var rows = [], row = [], cell = "", q = false;
+  for (var i = 0; i < text.length; i++) {
+    var c = text.charAt(i);
+    if (q) {
+      if (c === '"') { if (text.charAt(i + 1) === '"') { cell += '"'; i++; } else q = false; }
+      else cell += c;
+    } else if (c === '"') q = true;
+    else if (c === ",") { row.push(cell); cell = ""; }
+    else if (c === "\n" || c === "\r") {
+      if (c === "\r" && text.charAt(i + 1) === "\n") i++;
+      row.push(cell); rows.push(row); row = []; cell = "";
+    } else cell += c;
+  }
+  if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
+  return rows.filter(function (r) { return r.some(function (x) { return x !== ""; }); });
+}
+// 出荷リストのCSV（パソコンの 2点照合ツール.xlsm で書き出したもの、または出荷リストのシートをCSVにしたもの）を読む。
+// 「納品番号」「品番」「納品数」のある行を見出しとみなす。「種類」列が「マスタ」の行は品番マスタ（品番・機種・通函最大入り数）
+function parseListCsv(text, fileName) {
+  var rows = parseCsv(text), hi = -1;
+  for (var i = 0; i < rows.length && i < 30; i++) {
+    var h = rows[i].map(function (x) { return x.trim(); });
+    if (h.indexOf("納品番号") >= 0 && h.indexOf("品番") >= 0 && h.indexOf("納品数") >= 0) { hi = i; break; }
+  }
+  if (hi < 0) return { error: "出荷リストのCSVではありません（納品番号・品番・納品数の見出しがありません）" };
+  var head = rows[hi].map(function (x) { return x.trim(); });
+  var col = function (name) { return head.indexOf(name); };
+  var list = { id: "L" + Date.now().toString(36), name: String(fileName || "出荷リスト").replace(/\.csv$/i, ""), loaded: nowText(), rows: [], master: {} };
+  var bad = 0;
+  rows.slice(hi + 1).forEach(function (c) {
+    var g = function (name) { var k = col(name); return k >= 0 && k < c.length ? cleanText(c[k]) : ""; };
+    if (g("種類") === "マスタ") {
+      var mh = g("品番");
+      if (mh) list.master[normKey(mh)] = { hinban: mh, kishu: g("機種"), irisu: g("通函最大入り数") };
+      return;
+    }
+    var r = { no: g("No.") || g("No"), nohin: g("納品番号"), noki: g("納期"), hinban: g("品番"), hinmei: g("品名"),
+      qty: toInt(g("納品数")), kishu: g("機種"), irisu: g("通函最大入り数"), biko: g("備考"), labels: toInt(g("ラベル枚数")), hasu: g("端数入数") };
+    if (!r.nohin && !r.hinban) return;
+    if (!r.nohin || !(r.qty >= 0)) { bad++; return; }
+    if (!(r.labels >= 0)) r.labels = 0;
+    if (!r.no) r.no = String(list.rows.length + 1);
+    list.rows.push(r);
+  });
+  // 機種・通函最大入り数が空なら、品番マスタから入れる
+  list.rows.forEach(function (r) {
+    var m = list.master[normKey(r.hinban)];
+    if (m) { if (!r.kishu) r.kishu = m.kishu; if (!r.irisu) r.irisu = m.irisu; }
+  });
+  if (!list.rows.length) return { error: "出荷リストの行がありません" };
+  return { list: list, bad: bad };
+}
+function importListFile() {
+  pickFile(".csv,text/csv,text/comma-separated-values", function (f) {
+    readTextFile(f, function (text) {
+      var res = parseListCsv(text, f.name);
+      if (res.error) { alert("取り込めませんでした：" + res.error); return; }
+      applyList(res.list, res.bad);
+    });
+  });
+}
+function applyList(list, bad) {
+  var n = Object.keys(list.master).length;
+  var msg = "出荷リスト「" + list.name + "」\n" + list.rows.length + " 行" + (n ? "、品番マスタ " + n + " 品番" : "") + "\n" +
+    (bad ? "（納品番号か納品数がない " + bad + " 行は入れていません）\n" : "");
+  var live = R.filter(function (r) { return !r.cancel; }).length;
+  if (L && R.length) {
+    // 記録がある：リストだけ差し替える（直前の変更）か、新しい出荷として記録を消すか
+    openModal('<h2 style="margin-top:0">出荷リストを取り込む</h2><div class="card" style="white-space:pre-wrap">' + esc(msg) + '</div>' +
+      '<div class="muted">この端末に記録が ' + R.length + ' 件（取消以外 ' + live + ' 件）あります。</div>' +
+      '<button class="btn primary block" id="lk" style="margin-top:12px">記録は残して、リストだけ差し替える<br>（納期変更・追加で出荷リストが新しくなった）</button>' +
+      '<button class="btn danger block" id="ln" style="margin-top:10px">記録を消して、新しい出荷を始める</button>' +
+      '<button class="btn block" id="lc" style="margin-top:10px">やめる</button>',
+      function (m) {
+        m.querySelector("#lc").onclick = closeModal;
+        m.querySelector("#lk").onclick = function () { L = list; saveAll(); closeModal(); lastResult = null; render(); alert("出荷リストを差し替えました。記録はそのままです。"); };
+        m.querySelector("#ln").onclick = function () {
+          if (!confirm("記録 " + R.length + " 件を消します。\n先に「記録をCSVで書き出す」をしましたか？")) return;
+          L = list; R = []; S.seq = 0; S.pend = null; lastResult = null; saveAll(); closeModal(); render();
+          alert("出荷リストを入れました。記録を消して、新しい出荷を始めます。");
+        };
+      });
+    return;
+  }
+  if (!confirm(msg + "\nこの出荷リストを入れますか？")) return;
+  L = list; S.pend = null; lastResult = null; saveAll(); render();
+}
+// ほかの端末の記録CSVを取り込む（ID が同じ記録は二重に入れない）
+function importRecordsCsv(text) {
+  var rows = parseCsv(text);
+  if (!rows.length) return { error: "中身がありません" };
+  var h = rows[0].map(function (x) { return x.trim(); });
+  var col = function (name) { return h.indexOf(name); };
+  if (col("納品番号") < 0 || col("入数") < 0 || col("結果") < 0 || col("ID") < 0) return { error: "2点照合の記録CSVではありません" };
+  var have = {}, added = 0, skipped = 0;
+  R.forEach(function (r) { have[r.id] = r; });
+  rows.slice(1).forEach(function (c) {
+    var g = function (name) { var i = col(name); return i >= 0 && i < c.length ? c[i].trim() : ""; };
+    var r = { id: g("ID"), no: g("No."), t: g("日時"), tanto: g("作業者"), result: g("結果") === "NG" ? "NG" : "OK", warn: g("注意"),
+      nohin: g("納品番号"), hinban: g("品番"), qty: toInt(g("入数")), kbRaw: g("かんばん（読んだ内容）"), lbRaw: g("社内ラベル（読んだ内容）"),
+      cancel: g("取消"), cancelT: g("取消日時"), list: g("出荷リスト"), device: g("端末名") || "取込" };
+    if (!r.id || !r.nohin) return;
+    if (!(r.qty >= 0)) r.qty = 0;
+    var old = have[r.id];
+    if (old) {
+      // 向こうで取り消した記録は、こちらでも取り消しにする
+      if (r.cancel && !old.cancel) { old.cancel = r.cancel; old.cancelT = r.cancelT; }
+      skipped++; return;
+    }
+    have[r.id] = r;
+    R.push(r); added++;
+  });
+  R.sort(function (a, b) { return a.t < b.t ? -1 : a.t > b.t ? 1 : 0; });
+  return { added: added, skipped: skipped };
+}
+function pickFile(accept, cb) {
+  var inp = document.createElement("input");
+  inp.type = "file"; inp.accept = accept;
+  inp.onchange = function () { if (inp.files && inp.files[0]) cb(inp.files[0]); };
+  inp.click();
+}
+
+/* ---------------- 画面：設定 ---------------- */
+function renderSet() {
+  var k = S.kb;
+  return '<h1>設定</h1>' +
+    '<div class="card"><h2 style="margin-top:0">出荷リスト</h2>' +
+    '<div class="muted" style="margin-bottom:8px">' + (L ? "今のリスト：" + esc(L.name) + "（" + L.rows.length + " 行、" + esc(L.loaded) + " 取り込み）" : "まだ入っていません") + '</div>' +
+    '<button id="impL" class="btn primary block">出荷リストを取り込む（パソコンから送ったCSV）</button></div>' +
+    '<div class="card"><h2 style="margin-top:0">この端末</h2>' +
+    '<label class="field"><span>端末名（何台かで読むとき、どの端末の記録かを見分けます）</span>' +
+    '<input id="dev" class="input" type="text" autocomplete="off" placeholder="例：iPad-1、Android-1" value="' + esc(S.device) + '"></label>' +
+    '<label class="row" style="min-height:44px"><input id="snd" type="checkbox" style="width:26px;height:26px"' + (S.sound ? " checked" : "") + '> <span>読んだときに音を出す</span></label>' +
+    '</div>' +
+    '<div class="card"><h2 style="margin-top:0">納入かんばん（バーコード）の読み方</h2>' +
+    '<label class="field"><span>かんばんと社内ラベルの合わせ方</span><select id="kbm" class="input">' +
+    KB_MODES.map(function (m) { return '<option value="' + m.v + '"' + (m.v === k.mode ? " selected" : "") + '>' + esc(m.name) + '</option>'; }).join("") +
+    '</select></label>' +
+    '<div id="kbMemo" class="muted" style="margin:-6px 0 12px">' + esc(kbMemo(k.mode)) + '</div>' +
+    '<div id="kbShort" class="errtxt" style="margin:-6px 0 12px">' + esc(shortNohinWarning()) + '</div>' +
+    '<div id="kbPos" class="row' + (k.mode === "pos" ? "" : " hidden") + '" style="margin-bottom:12px">' +
+    '<label class="grow"><span class="muted">何文字目から</span><input id="kbs" class="input" type="text" inputmode="numeric" value="' + k.start + '"></label>' +
+    '<label class="grow"><span class="muted">何文字</span><input id="kbl" class="input" type="text" inputmode="numeric" value="' + k.len + '"></label></div>' +
+    '<div id="kbDel" class="row' + (k.mode === "delim" ? "" : " hidden") + '" style="margin-bottom:12px">' +
+    '<label class="grow"><span class="muted">区切り文字</span><input id="kbd" class="input" type="text" autocomplete="off" value="' + esc(k.delim) + '"></label>' +
+    '<label class="grow"><span class="muted">何番目</span><input id="kbi" class="input" type="text" inputmode="numeric" value="' + k.index + '"></label></div>' +
+    '<div class="muted">かんばんの中身がわかったら、ここで合わせ方を変えられます。下の欄で試し読みできます（記録はしません）。</div>' +
+    '<input id="kbt" class="input" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="試し読み（ここでかんばんを読む）" style="margin-top:8px">' +
+    '<div id="kbr" class="testbox">まだ読んでいません</div></div>' +
+    '<div class="card"><h2 style="margin-top:0">社内ラベル（QR）の中身</h2>' +
+    '<input id="qf" class="input" type="text" autocomplete="off" autocapitalize="off" value="' + esc(normalizeFormat(S.qrFmt)) + '">' +
+    '<div class="tokens">' + TOKENS.map(function (t) { return '<button class="chip" data-t="' + t + '">＋' + t + '</button>'; }).join("") +
+    '<button class="chip" data-t="!back">1つ消す</button><button class="chip" data-t="!def">元に戻す</button></div>' +
+    '<div id="qe" class="errtxt"></div>' +
+    '<div class="muted">QRに入っている順に並べます。今の社内ラベルは「納品番号,品番,入数」です。項目の数がこれと同じQRを社内ラベル、それ以外をかんばんとみなします。</div></div>' +
+    '<div class="card"><h2 style="margin-top:0">データ</h2>' +
+    '<button id="expRec" class="btn primary block" style="margin-bottom:10px">記録をCSVで書き出す（パソコンへ送る）</button>' +
+    '<button id="impRec" class="btn block" style="margin-bottom:10px">ほかの端末の記録を取り込む（CSV）</button>' +
+    '<button id="expSet" class="btn block" style="margin-bottom:10px">読み方の設定を書き出す（ほかの端末にそろえる）</button>' +
+    '<button id="impSet" class="btn block" style="margin-bottom:10px">読み方の設定を取り込む</button>' +
+    '<button id="clr" class="btn danger block">記録を全部消す（新しい出荷）</button>' +
+    '<div class="muted" style="margin-top:10px">記録はこの端末の中にだけ保存されます（ネットには送りません）。記録 ' + R.length + ' 件。</div>' +
+    '</div>' +
+    '<div class="muted" style="text-align:center">2点照合ツール 版 ' + APP_VERSION + '</div>';
+}
+function kbMemo(mode) {
+  var m = KB_MODES.filter(function (x) { return x.v === mode; })[0];
+  return m ? m.memo : "";
+}
+function kbTest() {
+  var raw = cleanText(document.getElementById("kbt").value), el = document.getElementById("kbr");
+  if (!raw) { el.textContent = "まだ読んでいません"; return; }
+  if (parseLabel(raw)) { el.innerHTML = "これは社内ラベルのQRとして読めます（かんばんではありません）：" + esc(raw); return; }
+  var lk = kanbanLookup(raw), v = kanbanValue(raw);
+  el.innerHTML = "読んだ内容：<b>" + esc(raw) + "</b>（" + raw.length + " 文字）<br>" +
+    (v === null ? "" : "取り出した納品番号：<b>" + esc(v || "（取り出せません）") + "</b><br>") +
+    (L ? (lk.group ? "出荷リスト：No." + esc(lk.group.rows[0].no) + "　納品番号 " + esc(lk.group.nohin) + "　" + esc(groupHinban(lk.group).join("・")) :
+      "出荷リストに合う納品番号はありません") : "（出荷リストが入っていないので、リストとは比べていません）");
+}
+function bindSet() {
+  document.getElementById("impL").onclick = importListFile;
+  var dev = document.getElementById("dev");
+  dev.onchange = function () { S.device = dev.value.trim(); saveAll(); };
+  document.getElementById("snd").onchange = function (e) { S.sound = e.target.checked; saveAll(); };
+  var kbm = document.getElementById("kbm");
+  kbm.onchange = function () {
+    S.kb.mode = kbm.value; saveAll();
+    document.getElementById("kbPos").classList.toggle("hidden", S.kb.mode !== "pos");
+    document.getElementById("kbDel").classList.toggle("hidden", S.kb.mode !== "delim");
+    document.getElementById("kbMemo").textContent = kbMemo(S.kb.mode);
+    document.getElementById("kbShort").textContent = shortNohinWarning();
+    kbTest();
+  };
+  var num = function (id, key) {
+    var el = document.getElementById(id);
+    el.oninput = function () { var n = toInt(el.value); if (n >= 1) { S.kb[key] = n; saveAll(); } kbTest(); };
+  };
+  num("kbs", "start"); num("kbl", "len"); num("kbi", "index");
+  var kbd = document.getElementById("kbd");
+  kbd.oninput = function () { if (kbd.value) { S.kb.delim = kbd.value; saveAll(); } kbTest(); };
+  var kbt = document.getElementById("kbt");
+  kbt.oninput = kbTest;
+  kbt.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.keyCode === 13) { e.preventDefault(); kbTest(); kbt.select(); } });
+  var qf = document.getElementById("qf"), qe = document.getElementById("qe");
+  var setQr = function (v) {
+    var f = normalizeFormat(v), fe = formatError(f);
+    qe.textContent = fe;
+    if (!fe) { S.qrFmt = f; saveAll(); }
+  };
+  qf.oninput = function () { setQr(qf.value); };
+  Array.prototype.forEach.call(document.querySelectorAll("[data-t]"), function (b) {
+    b.onclick = function () {
+      var t = b.getAttribute("data-t"), cur = normalizeFormat(qf.value), arr = cur ? cur.split(",") : [];
+      if (t === "!back") arr.pop(); else if (t === "!def") arr = DEFAULT_QR.split(","); else arr.push(t);
+      qf.value = arr.join(","); setQr(qf.value);
+    };
+  });
+  document.getElementById("expRec").onclick = exportRecords;
+  document.getElementById("impRec").onclick = function () {
+    pickFile(".csv,text/csv,text/comma-separated-values", function (f) {
+      readTextFile(f, function (text) {
+        var res = importRecordsCsv(text);
+        if (res.error) { alert("取り込めませんでした：" + res.error); return; }
+        saveAll(); render();
+        alert(res.added + " 件を取り込みました。" + (res.skipped ? "\n（すでにある " + res.skipped + " 件は入れていません）" : ""));
+      });
+    });
+  };
+  document.getElementById("expSet").onclick = function () {
+    shareFile("2点照合_読み方の設定_" + stamp() + ".json", JSON.stringify({ type: "niten-settings", version: 1, kb: S.kb, qrFmt: S.qrFmt }, null, 2), "application/json");
+  };
+  document.getElementById("impSet").onclick = function () {
+    pickFile(".json,application/json", function (f) {
+      readTextFile(f, function (text) {
+        var d = null;
+        try { d = JSON.parse(text); } catch (e) { d = null; }
+        if (!d || d.type !== "niten-settings" || !d.kb) { alert("読み方の設定のファイルではありません。"); return; }
+        if (!confirm("かんばんの読み方と、社内ラベルの中身を、ファイルの内容に置き換えますか？")) return;
+        S.kb = d.kb; S.qrFmt = String(d.qrFmt || DEFAULT_QR);
+        var keepDev = S.device;
+        saveAll(); loadAll(); S.device = keepDev; render();
+      });
+    });
+  };
+  document.getElementById("clr").onclick = function () {
+    if (!R.length) { alert("記録はありません。"); return; }
+    if (!confirm("記録 " + R.length + " 件を全部消して、新しい出荷を始めます。\n先に「記録をCSVで書き出す」をしましたか？")) return;
+    if (!confirm("本当に消してよいですか？（元に戻せません）")) return;
+    R = []; S.seq = 0; S.pend = null; lastResult = null; saveAll(); render();
+  };
+}
+
+/* ---------------- モーダル・画面の切り替え ---------------- */
+function openModal(html, onMount) {
+  var root = document.getElementById("modalRoot");
+  root.innerHTML = '<div class="modal-bg"><div class="modal">' + html + '</div></div>';
+  var bg = root.firstChild;
+  bg.addEventListener("click", function (e) { if (e.target === bg) closeModal(); });
+  if (onMount) onMount(bg.firstChild);
+}
+function closeModal() { document.getElementById("modalRoot").innerHTML = ""; }
+
+function render() {
+  stopCamera();
+  var app = document.getElementById("app");
+  if (tab === "scan") { app.innerHTML = renderScan(); bindScan(); }
+  else if (tab === "prog") { app.innerHTML = renderProg(); bindProg(); }
+  else if (tab === "list") { app.innerHTML = renderList(); bindList(); }
+  else { app.innerHTML = renderSet(); bindSet(); }
+  Array.prototype.forEach.call(document.querySelectorAll("#tabs button"), function (b) {
+    b.classList.toggle("sel", b.getAttribute("data-tab") === tab);
+  });
+}
+Array.prototype.forEach.call(document.querySelectorAll("#tabs button"), function (b) {
+  b.onclick = function () { tab = b.getAttribute("data-tab"); closeModal(); render(); window.scrollTo(0, 0); };
+});
+
+loadAll();
+render();
+
+// アプリを端末に保存する（2回目からはネットなしで起動できる）
+if ("serviceWorker" in navigator && location.protocol === "https:") {
+  navigator.serviceWorker.register("sw.js").catch(function () { });
+}
+</script>
+</body>
+</html>
