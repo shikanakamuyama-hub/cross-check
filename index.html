@@ -214,7 +214,7 @@ select.input { -webkit-appearance: none; appearance: none; }
    出荷リストが古いことがあるので、リスト外・品番違い・数量オーバーは止めずに「注意」として記録する。
    記録は端末の中（localStorage）にだけ保存し、ネットには送らない。CSV でパソコンへ渡す。 */
 
-var APP_VERSION = "1.2.5";
+var APP_VERSION = "1.2.6";
 var IS_ANDROID = /Android/i.test(navigator.userAgent);
 var IS_WINDOWS = /Windows/i.test(navigator.userAgent);
 var LS_SET = "niten.settings.v1";
@@ -450,6 +450,7 @@ function kanbanLookup(raw) {
   return { value: best ? best.nohin : "", group: best };
 }
 
+// 欄は type="url"：日本語入力の変換を通さないため（Android で変換中の文字が欄の外に出る・Enter が届かない・遅くなるのを防ぐ）
 // スキャナの欄。Enter・Tab が届けば確定。届かない端末でも、文字が一気に入って止まったらスキャナとみて確定する。
 // 手で打っているとき（文字の間隔が長い・消した）は自動で確定しない（「決定」か Enter で確定）
 // 止まったと見る時間は、文字の間隔の4倍（速いスキャナほど短い。途中で切れないように 150ms より短くしない）
@@ -890,7 +891,7 @@ function renderScan() {
       '<div class="frame k" id="camFrame"></div><div class="camNow k" id="camNow"></div><div class="camMsg" id="camMsg"></div></div>' +
       '<button id="camSwitch" class="btn small block hidden" style="margin-top:8px">⇄ カメラを切り替え（前面／背面）</button></div>' :
       '<div class="muted">スキャナ（Bluetooth・USB）で読むと自動で確定します。色のついた欄が選ばれていないときはタップしてください。手で入れたときは「決定」を押します。</div>' +
-      '<div class="row"><input id="scanInput" class="input scan-input k" style="flex:1;min-width:0" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" placeholder="① 納入かんばんを読む">' +
+      '<div class="row"><input id="scanInput" class="input scan-input k" style="flex:1;min-width:0" type="url" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" placeholder="① 納入かんばんを読む">' +
       '<button id="scanOk" class="btn" style="min-height:60px">決定</button></div>') +
     '</div>' +
     '<div class="card"><div class="row"><b class="grow">最近の記録</b><span class="muted" id="recCount"></span></div><div id="recent" style="margin-top:8px"></div></div>' +
@@ -1419,7 +1420,7 @@ function openQrReceive() {
     '<button id="mcamBtn" class="btn primary block">カメラで読む</button>' +
     '<div id="mcamBox" class="hidden" style="margin-top:8px"><div class="cam" style="aspect-ratio:1/1"><video id="mcamVideo" playsinline muted autoplay></video>' +
     '<div class="frame" style="left:8%;top:8%;width:84%;height:84%"></div><div class="camMsg" id="mcamMsg"></div></div></div>' +
-    '<input id="qrIn" class="input scan-input" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="スキャナで読む（ここをタップ）" style="margin-top:10px">' +
+    '<input id="qrIn" class="input scan-input" type="url" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="スキャナで読む（ここをタップ）" style="margin-top:10px">' +
     '<div id="qrMsg" class="result" style="margin-top:10px">まだ読んでいません</div><div id="qrSlots" class="chips"></div>' +
     '<button id="qrClose" class="btn block" style="margin-top:6px">やめる</button>',
     function (m) {
@@ -1573,7 +1574,7 @@ function renderSet() {
     '<label class="grow"><span class="muted">区切り文字</span><input id="kbd" class="input" type="text" autocomplete="off" value="' + esc(k.delim) + '"></label>' +
     '<label class="grow"><span class="muted">何番目</span><input id="kbi" class="input" type="text" inputmode="numeric" value="' + k.index + '"></label></div>' +
     '<div class="muted">かんばんの中身がわかったら、ここで合わせ方を変えられます。下の欄で試し読みできます（記録はしません）。</div>' +
-    '<input id="kbt" class="input" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="試し読み（ここでかんばんを読む）" style="margin-top:8px">' +
+    '<input id="kbt" class="input" type="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="試し読み（ここでかんばんを読む）" style="margin-top:8px">' +
     '<div id="kbr" class="testbox">まだ読んでいません</div></div>' +
     '<div class="card"><h2 style="margin-top:0">社内ラベル（QR）の中身</h2>' +
     '<div style="font-size:19px;font-weight:700">' + esc(DEFAULT_QR) + '（3項目）</div>' +
