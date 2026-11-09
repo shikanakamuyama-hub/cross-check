@@ -65,6 +65,7 @@ select.input { -webkit-appearance: none; appearance: none; }
 .now.k { background: #2F75B5; }
 .now.l { background: #C55A11; }
 .now .ns { font-size: 14px; opacity: .92; }
+.now .nhow { font-size: 16px; font-weight: 700; }
 .now .nw { font-size: 22px; font-weight: 800; line-height: 1.25; }
 @media (max-width: 400px) { .now .nw { font-size: 20px; letter-spacing: -0.5px; } }
 .now .nk { display: flex; gap: 10px; align-items: center; }
@@ -144,6 +145,9 @@ select.input { -webkit-appearance: none; appearance: none; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
 .chip { min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: #fff; font-size: 15px; }
 .chip.sel { background: var(--head); color: #fff; border-color: var(--head); }
+.chipwrap { display: inline-flex; align-items: center; }
+.chipwrap .chip { border-radius: 999px 0 0 999px; border-right: 0; }
+.chipx { min-height: 40px; min-width: 40px; border: 1px solid var(--line); border-radius: 0 999px 999px 0; background: #F2F3F5; color: var(--sub); font-size: 18px; }
 
 /* 照合状況 */
 .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
@@ -215,7 +219,7 @@ select.input { -webkit-appearance: none; appearance: none; }
    出荷リストが古いことがあるので、リスト外・品番違い・数量オーバーは止めずに「注意」として記録する。
    記録は端末の中（localStorage）にだけ保存し、ネットには送らない。CSV でパソコンへ渡す。 */
 
-var APP_VERSION = "1.4.4";
+var APP_VERSION = "1.4.6";
 var IS_ANDROID = /Android/i.test(navigator.userAgent);
 var IS_WINDOWS = /Windows/i.test(navigator.userAgent);
 var LS_SET = "niten.settings.v1";
@@ -956,6 +960,7 @@ function renderSteps() {
     var lk = two ? kanbanLookup(p.raw) : null;
     el.innerHTML = '<div class="nk"><div class="nw grow">' + (two ? "② 社内ラベルを読む" : "① 納入かんばんを読む") + '</div>' +
       (two ? '<button id="pendClr" class="btn small">読み直す</button>' : "") + '</div>' +
+      '<div class="nhow" id="nowHow">' + (S.input === "scanner" ? (two ? "スキャナで読んでください" : "スキャナで読んでください（画面のタップは不要）") : "下の「カメラで読む」で読んでください") + '</div>' +
       (two ? '<div class="ns">読んだかんばん</div><div class="nv" id="nowKanban">' + esc(kv === null ? p.raw : kv) + '</div>' +
         '<div class="ni" id="nowInfo">' + (lk.group ? '<div class="nh" id="nowHin">' + esc(groupHinban(lk.group).join("・")) + '</div><div class="nr">' + remainHtml(remainText(lk.group, sumFor(lk.group.nohin), boxesFor(lk.group.nohin), true)) + '</div>' :
           "このかんばんの納品番号は、出荷リストに見つかりません") + '</div>' :
@@ -996,13 +1001,24 @@ function renderRecent() {
 function editTanto() {
   openModal('<h2 style="margin-top:0">作業者</h2>' +
     '<input id="pv" class="input" type="text" autocomplete="off" value="' + esc(S.tanto) + '" placeholder="作業者の名前">' +
-    (S.tantos.length ? '<div class="muted" style="margin-top:10px">最近使った名前</div><div class="chips">' +
-      S.tantos.map(function (v) { return '<button class="chip" data-v="' + esc(v) + '">' + esc(v) + '</button>'; }).join("") + '</div>' : "") +
+    (S.tantos.length ? '<div class="muted" id="pvHead" style="margin-top:10px">最近使った名前（×で消せます）</div><div class="chips">' +
+      S.tantos.map(function (v) { return '<span class="chipwrap"><button class="chip" data-v="' + esc(v) + '">' + esc(v) + '</button><button class="chipx" data-x="' + esc(v) + '" aria-label="消す">×</button></span>'; }).join("") + '</div>' : "") +
     '<div class="row" style="margin-top:14px"><button class="btn grow" id="pc">やめる</button><button class="btn primary grow" id="po">決定</button></div>',
     function (m) {
       var inp = m.querySelector("#pv");
       Array.prototype.forEach.call(m.querySelectorAll("[data-v]"), function (b) {
         b.onclick = function () { inp.value = b.getAttribute("data-v"); };
+      });
+      // 最近使った名前から消す（これまでの記録の作業者名は変わらない）
+      Array.prototype.forEach.call(m.querySelectorAll("[data-x]"), function (b) {
+        b.onclick = function () {
+          var v = b.getAttribute("data-x"), i = S.tantos.indexOf(v);
+          if (i >= 0) S.tantos.splice(i, 1);
+          saveAll();
+          b.parentNode.parentNode.removeChild(b.parentNode);
+          if (inp.value === v) inp.value = "";
+          if (!S.tantos.length) m.querySelector("#pvHead").style.display = "none";
+        };
       });
       m.querySelector("#pc").onclick = function () { closeModal(); render(); };
       m.querySelector("#po").onclick = function () {
