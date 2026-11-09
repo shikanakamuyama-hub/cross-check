@@ -112,7 +112,6 @@ select.input { -webkit-appearance: none; appearance: none; }
 .scan-input { font-size: 20px; min-height: 60px; border: 3px solid var(--accent); background: #EEF5FC; }
 .scan-input.k { border-color: #2F75B5; background: #EEF5FC; }
 .scan-input.l { border-color: #C55A11; background: #FBE5D6; }
-.scan-reading { color: transparent !important; -webkit-text-fill-color: transparent; caret-color: transparent; }
 .scan-grid { display: grid; gap: 12px; }
 @media (min-width: 860px) {
   .scan-grid { grid-template-columns: 1fr 1fr; align-items: start; }
@@ -215,7 +214,7 @@ select.input { -webkit-appearance: none; appearance: none; }
    出荷リストが古いことがあるので、リスト外・品番違い・数量オーバーは止めずに「注意」として記録する。
    記録は端末の中（localStorage）にだけ保存し、ネットには送らない。CSV でパソコンへ渡す。 */
 
-var APP_VERSION = "1.2.4";
+var APP_VERSION = "1.2.5";
 var IS_ANDROID = /Android/i.test(navigator.userAgent);
 var IS_WINDOWS = /Windows/i.test(navigator.userAgent);
 var LS_SET = "niten.settings.v1";
@@ -456,13 +455,13 @@ function kanbanLookup(raw) {
 // 止まったと見る時間は、文字の間隔の4倍（速いスキャナほど短い。途中で切れないように 150ms より短くしない）
 var SCAN_IDLE_MIN = 150, SCAN_IDLE_MAX = 300, SCAN_FAST_MS = 80;
 function bindScanField(inp, take) {
-  var timer = 0, first = 0, last = 0, prevLen = 0, manual = false, maxGap = 0, slow = false;
-  function reset() { clearTimeout(timer); timer = 0; first = 0; last = 0; prevLen = 0; manual = false; maxGap = 0; slow = false; inp.classList.remove("scan-reading"); }
+  var timer = 0, first = 0, last = 0, prevLen = 0, manual = false, maxGap = 0;
+  function reset() { clearTimeout(timer); timer = 0; first = 0; last = 0; prevLen = 0; manual = false; maxGap = 0; }
   function done() { var v = inp.value; inp.value = ""; reset(); take(v); }
   function check() {
     var n = inp.value.length;
-    if (document.body.contains(inp) && !manual && n >= 2 && (last - first) / (n - 1) < SCAN_FAST_MS) { done(); return; }
-    inp.classList.remove("scan-reading");
+    if (!document.body.contains(inp) || manual || n < 2) return;
+    if ((last - first) / (n - 1) < SCAN_FAST_MS) done();
   }
   inp.addEventListener("keydown", function (e) {
     if (e.key === "Enter" || e.keyCode === 13 || e.key === "Tab") { e.preventDefault(); done(); }
@@ -473,9 +472,7 @@ function bindScanField(inp, take) {
     if (!n) { reset(); return; }
     if (n < prevLen) manual = true;
     if (!first) first = now;
-    if (last) { maxGap = Math.max(maxGap, now - last); if (now - last >= SCAN_FAST_MS) slow = true; }
-    // スキャナが送っている間は文字を隠す（1文字ずつ出ないように）。手で打っているときは隠さない
-    inp.classList[manual || slow ? "remove" : "add"]("scan-reading");
+    if (last) maxGap = Math.max(maxGap, now - last);
     last = now; prevLen = n;
     timer = setTimeout(check, Math.min(SCAN_IDLE_MAX, Math.max(SCAN_IDLE_MIN, maxGap * 4)));
   });
