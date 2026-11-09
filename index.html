@@ -214,7 +214,7 @@ select.input { -webkit-appearance: none; appearance: none; }
    出荷リストが古いことがあるので、リスト外・品番違い・数量オーバーは止めずに「注意」として記録する。
    記録は端末の中（localStorage）にだけ保存し、ネットには送らない。CSV でパソコンへ渡す。 */
 
-var APP_VERSION = "1.2.0";
+var APP_VERSION = "1.2.1";
 var IS_ANDROID = /Android/i.test(navigator.userAgent);
 var IS_WINDOWS = /Windows/i.test(navigator.userAgent);
 var LS_SET = "niten.settings.v1";
@@ -448,6 +448,33 @@ function kanbanLookup(raw) {
     if (nr.indexOf(k) >= 0 && (!best || k.length > best.key.length)) best = idx[k];
   });
   return { value: best ? best.nohin : "", group: best };
+}
+
+// スキャナの欄。Enter・Tab が届けば確定。届かない端末でも、文字が一気に入って止まったらスキャナとみて確定する。
+// 手で打っているとき（文字の間隔が長い・消した）は自動で確定しない（「決定」か Enter で確定）
+var SCAN_IDLE_MS = 300, SCAN_FAST_MS = 80;
+function bindScanField(inp, take) {
+  var timer = 0, first = 0, last = 0, prevLen = 0, manual = false;
+  function reset() { clearTimeout(timer); timer = 0; first = 0; last = 0; prevLen = 0; manual = false; }
+  function done() { var v = inp.value; inp.value = ""; reset(); take(v); }
+  function check() {
+    var n = inp.value.length;
+    if (!document.body.contains(inp) || manual || n < 2) return;
+    if ((last - first) / (n - 1) < SCAN_FAST_MS) done();
+  }
+  inp.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" || e.keyCode === 13 || e.key === "Tab") { e.preventDefault(); done(); }
+  });
+  inp.addEventListener("input", function () {
+    var now = Date.now(), n = inp.value.length;
+    clearTimeout(timer);
+    if (!n) { reset(); return; }
+    if (n < prevLen) manual = true;
+    if (!first) first = now;
+    last = now; prevLen = n;
+    timer = setTimeout(check, SCAN_IDLE_MS);
+  });
+  return done;
 }
 
 function processScan(raw, source) {
@@ -849,8 +876,9 @@ function renderScan() {
       '<div id="camBox" class="hidden" style="margin-top:10px"><div class="cam"><video id="video" playsinline muted autoplay></video>' +
       '<div class="frame k" id="camFrame"></div><div class="camNow k" id="camNow"></div><div class="camMsg" id="camMsg"></div></div>' +
       '<button id="camSwitch" class="btn small block hidden" style="margin-top:8px">⇄ カメラを切り替え（前面／背面）</button></div>' :
-      '<div class="muted">スキャナ（Bluetooth・USB）で読みます。色のついた欄が選ばれていないときはタップしてください。</div>' +
-      '<input id="scanInput" class="input scan-input k" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" placeholder="① 納入かんばんを読む">') +
+      '<div class="muted">スキャナ（Bluetooth・USB）で読むと自動で確定します。色のついた欄が選ばれていないときはタップしてください。手で入れたときは「決定」を押します。</div>' +
+      '<div class="row"><input id="scanInput" class="input scan-input k" style="flex:1;min-width:0" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" placeholder="① 納入かんばんを読む">' +
+      '<button id="scanOk" class="btn" style="min-height:60px">決定</button></div>') +
     '</div>' +
     '<div class="card"><div class="row"><b class="grow">最近の記録</b><span class="muted" id="recCount"></span></div><div id="recent" style="margin-top:8px"></div></div>' +
     '</div></div>';
@@ -886,13 +914,8 @@ function bindScan() {
     document.getElementById("camSwitch").onclick = nextCamera;
   } else {
     var inp = document.getElementById("scanInput");
-    inp.addEventListener("keydown", function (e) {
-      if (e.key === "Enter" || e.keyCode === 13 || e.key === "Tab") {
-        e.preventDefault();
-        var v = inp.value; inp.value = "";
-        processScan(v, "scanner");
-      }
-    });
+    var scanDone = bindScanField(inp, function (v) { processScan(v, "scanner"); });
+    document.getElementById("scanOk").onclick = function () { scanDone(); inp.focus(); };
     setTimeout(function () { if (!document.getElementById("modalRoot").innerHTML) inp.focus(); }, 50);
   }
   showResult(false);
@@ -1418,9 +1441,7 @@ function openQrReceive() {
       });
       m.querySelector("#qrClose").onclick = function () { closeModal(); render(); };
       var inp = m.querySelector("#qrIn");
-      inp.addEventListener("keydown", function (e) {
-        if (e.key === "Enter" || e.keyCode === 13 || e.key === "Tab") { e.preventDefault(); var v = inp.value; inp.value = ""; take(v); }
-      });
+      bindScanField(inp, take);
     });
 }
 function openQrSend() {
