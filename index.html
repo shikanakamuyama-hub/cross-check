@@ -215,7 +215,7 @@ select.input { -webkit-appearance: none; appearance: none; }
    出荷リストが古いことがあるので、リスト外・品番違い・数量オーバーは止めずに「注意」として記録する。
    記録は端末の中（localStorage）にだけ保存し、ネットには送らない。CSV でパソコンへ渡す。 */
 
-var APP_VERSION = "1.4.3";
+var APP_VERSION = "1.4.4";
 var IS_ANDROID = /Android/i.test(navigator.userAgent);
 var IS_WINDOWS = /Windows/i.test(navigator.userAgent);
 var LS_SET = "niten.settings.v1";
@@ -1711,7 +1711,17 @@ render();
 
 // アプリを端末に保存する（2回目からはネットなしで起動できる）
 if ("serviceWorker" in navigator && location.protocol === "https:") {
-  navigator.serviceWorker.register("sw.js").catch(function () { });
+  // 新しい版が入ったら開き直す（1回開くだけで新しい版になる）。はじめて入れたときは開き直さない
+  var hadSw = !!navigator.serviceWorker.controller, reloaded = false;
+  navigator.serviceWorker.addEventListener("controllerchange", function () {
+    if (!hadSw || reloaded) return;
+    reloaded = true;
+    location.reload();
+  });
+  navigator.serviceWorker.register("sw.js").then(function (reg) {
+    // アプリを閉じずに戻ってきたときも、新しい版を確かめる
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) reg.update().catch(function () { }); });
+  }).catch(function () { });
 }
 </script>
 </body>
