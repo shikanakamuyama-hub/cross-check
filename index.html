@@ -115,6 +115,8 @@ select.input { -webkit-appearance: none; appearance: none; }
 @media (min-width: 860px) {
   .scan-grid { grid-template-columns: 1fr 1fr; align-items: start; }
 }
+.subacts { display: flex; justify-content: center; gap: 8px; margin: 4px 0 12px; }
+.linkbtn { min-height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: none; color: var(--sub); font-size: 14px; }
 .seg { display: flex; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin-bottom: 10px; }
 .seg button { flex: 1; min-height: 46px; border: 0; background: #fff; font-weight: 600; }
 .seg button + button { border-left: 1px solid var(--line); }
@@ -213,7 +215,7 @@ select.input { -webkit-appearance: none; appearance: none; }
    出荷リストが古いことがあるので、リスト外・品番違い・数量オーバーは止めずに「注意」として記録する。
    記録は端末の中（localStorage）にだけ保存し、ネットには送らない。CSV でパソコンへ渡す。 */
 
-var APP_VERSION = "1.4.2";
+var APP_VERSION = "1.4.3";
 var IS_ANDROID = /Android/i.test(navigator.userAgent);
 var IS_WINDOWS = /Windows/i.test(navigator.userAgent);
 var LS_SET = "niten.settings.v1";
@@ -251,7 +253,7 @@ function loadAll() {
   if (typeof S.seq !== "number") S.seq = 0;
   if (typeof S.sound !== "boolean") S.sound = true;
   if (typeof S.camId !== "string") S.camId = "";
-  if (S.input !== "camera" && S.input !== "scanner") S.input = "camera";
+  if (S.input !== "camera" && S.input !== "scanner") S.input = "scanner";
   S.qrFmt = DEFAULT_QR;   // 社内ラベルのQRは3項目に固定（前の版で変えていても戻す）
   if (!S.kb || typeof S.kb !== "object") S.kb = {};
   if (!KB_MODES.some(function (m) { return m.v === S.kb.mode; })) S.kb.mode = "whole";
@@ -894,21 +896,15 @@ function renderScan() {
     '<div id="now" class="now k"></div>' +
     '<div class="scan-grid"><div>' +
     '<div id="result" class="result"></div>' +
-    (S.input === "camera" ? '<div class="card" style="margin-top:12px">' + inputSeg() +
+    (S.input === "camera" ? '<div class="card" style="margin-top:12px">' +
       '<button id="camBtn" class="btn primary block" style="min-height:60px;font-size:19px">カメラで読む</button>' +
       '<div id="camBox" class="hidden" style="margin-top:10px"><div class="cam"><video id="video" playsinline muted autoplay></video>' +
       '<div class="frame k" id="camFrame"></div><div class="camNow k" id="camNow"></div><div class="camMsg" id="camMsg"></div></div>' +
       '<button id="camSwitch" class="btn small block hidden" style="margin-top:8px">⇄ カメラを切り替え（前面／背面）</button></div></div>' : "") +
     '</div><div>' +
     '<div class="card"><div class="row"><b class="grow">最近の記録</b><span class="muted" id="recCount"></span></div><div id="recent" style="margin-top:8px"></div></div>' +
-    (S.input === "scanner" ? '<div class="card"><div class="row">' + inputSeg() +
-      '<button id="manualBtn" class="btn small">手で入れる</button></div>' +
-      '<div class="muted" style="margin-top:6px">スキャナは、この画面のまま読めます。</div></div>' : "") +
+    '<div class="subacts">' + (S.input === "scanner" ? '<button id="manualBtn" class="linkbtn">手で入れる</button><button data-in="camera" class="linkbtn">カメラで読む</button>' : '<button data-in="scanner" class="linkbtn">スキャナに戻す</button>') + '</div>' +
     '</div></div>';
-}
-function inputSeg() {
-  return '<div class="seg grow" id="inSeg"><button data-in="camera"' + (S.input === "camera" ? ' class="sel"' : "") + '>カメラ</button>' +
-    '<button data-in="scanner"' + (S.input === "scanner" ? ' class="sel"' : "") + '>スキャナ</button></div>';
 }
 // 出荷リストが、今日より前に取り込んだもので、今日まだ確かめていないか（同じリストを何日か使うときは、1日に1回確かめる）
 function todayText() { return nowText().slice(0, 10); }
