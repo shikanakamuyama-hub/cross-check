@@ -214,7 +214,7 @@ select.input { -webkit-appearance: none; appearance: none; }
    出荷リストが古いことがあるので、リスト外・品番違い・数量オーバーは止めずに「注意」として記録する。
    記録は端末の中（localStorage）にだけ保存し、ネットには送らない。CSV でパソコンへ渡す。 */
 
-var APP_VERSION = "1.2.2";
+var APP_VERSION = "1.2.3";
 var IS_ANDROID = /Android/i.test(navigator.userAgent);
 var IS_WINDOWS = /Windows/i.test(navigator.userAgent);
 var LS_SET = "niten.settings.v1";
@@ -628,14 +628,25 @@ function setResult(cls, text, sub) {
 
 /* ---------------- 音 ---------------- */
 var audioCtx = null;
+// 音の準備。タップだけでなく、スキャナのキー入力でも行う（スキャナだけで読むと、タップが一度もないことがある）
 function unlockAudio() {
-  if (audioCtx) return;
   try {
-    var AC = window.AudioContext || window.webkitAudioContext;
-    if (AC) audioCtx = new AC();
-  } catch (e) { audioCtx = null; }
+    if (!audioCtx) {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) audioCtx = new AC();
+    }
+    if (audioCtx && audioCtx.state === "suspended") {
+      audioCtx.resume();
+      // 止まっている音を動かすため、無音を1回流す
+      var src = audioCtx.createBufferSource();
+      src.buffer = audioCtx.createBuffer(1, 1, 22050);
+      src.connect(audioCtx.destination);
+      src.start(0);
+    }
+  } catch (e) { }
 }
 function beep(kind) {
+  if (S.sound) unlockAudio();
   var seqs = {
     step: [[990, 0, 0.06, "sine", 0.2]],
     ok: [[1320, 0, 0.09, "sine", 0.25], [1760, 0.11, 0.12, "sine", 0.25]],
@@ -645,7 +656,6 @@ function beep(kind) {
   };
   if (S.sound && audioCtx) {
     try {
-      if (audioCtx.state === "suspended") audioCtx.resume();
       (seqs[kind] || seqs.ok).forEach(function (p) {
         var o = audioCtx.createOscillator(), g = audioCtx.createGain();
         o.type = p[3]; o.frequency.value = p[0]; g.gain.value = p[4];
@@ -660,6 +670,7 @@ function beep(kind) {
 }
 document.addEventListener("touchend", unlockAudio, { passive: true });
 document.addEventListener("click", unlockAudio);
+document.addEventListener("keydown", unlockAudio);
 
 /* ---------------- カメラ ---------------- */
 var cam = { stream: null, video: null, canvas: null, ctx: null, timer: 0, lastText: "", lastSeen: 0, devices: [], autoTried: false, flip: 0 };
@@ -1547,6 +1558,7 @@ function renderSet() {
     '<label class="field"><span>端末名（何台かで読むとき、どの端末の記録かを見分けます）</span>' +
     '<input id="dev" class="input" type="text" autocomplete="off" placeholder="例：iPad-1、Android-1" value="' + esc(S.device) + '"></label>' +
     '<label class="row" style="min-height:44px"><input id="snd" type="checkbox" style="width:26px;height:26px"' + (S.sound ? " checked" : "") + '> <span>読んだときに音を出す</span></label>' +
+      '<button id="sndTest" class="btn small">音を試す</button>' +
     '</div>' +
     '<div class="card"><h2 style="margin-top:0">納入かんばん（バーコード）の読み方</h2>' +
     '<label class="field"><span>かんばんと社内ラベルの合わせ方</span><select id="kbm" class="input">' +
@@ -1599,6 +1611,7 @@ function bindSet() {
   var dev = document.getElementById("dev");
   dev.onchange = function () { S.device = dev.value.trim(); saveAll(); };
   document.getElementById("snd").onchange = function (e) { S.sound = e.target.checked; saveAll(); };
+  document.getElementById("sndTest").onclick = function () { beep("ok"); };
   var kbm = document.getElementById("kbm");
   kbm.onchange = function () {
     S.kb.mode = kbm.value; saveAll();
