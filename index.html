@@ -65,9 +65,12 @@ select.input { -webkit-appearance: none; appearance: none; }
 .now.k { background: #2F75B5; }
 .now.l { background: #C55A11; }
 .now .ns { font-size: 14px; opacity: .92; }
-.now .nw { font-size: 24px; font-weight: 800; line-height: 1.25; }
+.now .nw { font-size: 22px; font-weight: 800; line-height: 1.25; }
+@media (max-width: 400px) { .now .nw { font-size: 20px; letter-spacing: -0.5px; } }
 .now .nk { display: flex; gap: 10px; align-items: center; }
 .now .ni { font-size: 15px; font-weight: 700; word-break: break-all; }
+.now .nh { font-size: 26px; font-weight: 800; line-height: 1.2; }
+.now .nr { display: inline-flex; flex-wrap: wrap; gap: 0 12px; margin-top: 3px; padding: 1px 10px; border-radius: 8px; background: #fff; color: #1F2328; font-size: 24px; font-weight: 800; }
 .now .nv { font-size: 30px; font-weight: 800; line-height: 1.15; word-break: break-all; }
 .now .btn { background: #fff; color: #1F2328; border-color: transparent; flex: none; min-height: 34px; }
 /* 作業者と出荷リスト（1行） */
@@ -83,9 +86,10 @@ select.input { -webkit-appearance: none; appearance: none; }
 .result.wait { background: #DDEBF7; color: #1F4E79; }
 .result small { display: block; font-size: 15px; font-weight: 400; }
 .result .big { font-size: 26px; }
-.result .remain { display: block; font-size: 30px; font-weight: 800; margin-top: 4px; }
+.result .remain { display: flex; flex-wrap: wrap; gap: 0 14px; font-size: 32px; font-weight: 800; line-height: 1.2; margin-top: 2px; }
+.result .nohin { font-size: 17px; font-weight: 700; color: var(--text); margin-top: 2px; }
 .result .hinq { display: flex; flex-wrap: wrap; gap: 0 14px; align-items: baseline; margin-top: 4px; color: var(--text); font-size: 18px; font-weight: 400; }
-.result .hinq b { font-size: 26px; font-weight: 800; }
+.result .hinq b { font-size: 32px; font-weight: 800; line-height: 1.2; word-break: break-all; }
 .result .subinfo { font-size: 14px; font-weight: 400; color: var(--sub); margin-top: 4px; }
 /* 全部そろったとき */
 .alldone { position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 1000; background: #0E6B0E; color: #fff;
@@ -121,7 +125,7 @@ select.input { -webkit-appearance: none; appearance: none; }
   margin-bottom: 8px; border: 1px solid rgba(0,0,0,.08); background: #fff; width: 100%; text-align: left; }
 .rec .no { font-size: 13px; color: var(--sub); min-width: 38px; }
 .rec .main { flex: 1; min-width: 0; }
-.rec .hin { font-size: 19px; font-weight: 700; word-break: break-all; }
+.rec .hin { font-size: 22px; font-weight: 800; word-break: break-all; }
 .rec .qty { font-size: 22px; font-weight: 700; white-space: nowrap; align-self: center; }
 .rec .meta { font-size: 13px; color: var(--sub); word-break: break-all; }
 .rec.ng { background: var(--ng-bg); }
@@ -209,7 +213,7 @@ select.input { -webkit-appearance: none; appearance: none; }
    出荷リストが古いことがあるので、リスト外・品番違い・数量オーバーは止めずに「注意」として記録する。
    記録は端末の中（localStorage）にだけ保存し、ネットには送らない。CSV でパソコンへ渡す。 */
 
-var APP_VERSION = "1.4.0";
+var APP_VERSION = "1.4.2";
 var IS_ANDROID = /Android/i.test(navigator.userAgent);
 var IS_WINDOWS = /Windows/i.test(navigator.userAgent);
 var LS_SET = "niten.settings.v1";
@@ -580,6 +584,10 @@ function remainText(g, sum, boxes, atKanban) {
   if (rq < 0) return "納品数より " + fmtNum(-rq) + " 多いです";
   return (rb > 0 ? "あと " + rb + " 箱　" : "") + "残り数量 " + fmtNum(rq);
 }
+// 「あと ○ 箱」と「残り数量 ○」を、それぞれ途中で折り返さないように
+function remainHtml(text) {
+  return text.split("　").filter(Boolean).map(function (x) { return '<span style="white-space:nowrap">' + esc(x) + '</span>'; }).join("");
+}
 function showAllDone(p) {
   closeAllDone();
   var el = document.createElement("div");
@@ -619,10 +627,10 @@ function showPairResult(rec, g) {
       "この納品番号 " + fmtNum(sum) + (g ? " / " + fmtNum(g.qty) : "") + "（" + boxes + (g && g.labels ? " / " + g.labels : "") + " 箱）"].filter(Boolean).join("　／　") + '</div>';
   var head;
   if (rec.warn) head = "注意　No." + rec.no + "　" + rec.warn;
-  else if (g && sum === g.qty) head = "OK　No." + rec.no + "　納品番号 " + rec.nohin + " がそろいました";
-  else head = "OK　No." + rec.no + "　納品番号 " + rec.nohin;
+  else if (g && sum === g.qty) head = "OK　No." + rec.no + "　そろいました";
+  else head = "OK　No." + rec.no;
   lastResult = { cls: rec.warn ? "warn" : "ok", html: '<span class="big">' + esc(head) + '</span>' +
-    (g ? '<span class="remain">' + esc(remainText(g, sum, boxes)) + '</span>' : "") + kv +
+    (g ? '<div class="remain">' + remainHtml(remainText(g, sum, boxes)) + '</div>' : "") + '<div class="nohin">納品番号 ' + esc(rec.nohin) + '</div>' + kv +
     (rec.warn ? '<small style="margin-top:6px">記録しました。出荷リストが古いことがあるので、パソコンで確かめてください。</small>' : ""), pair: true };
   showResult(true);
 }
@@ -953,7 +961,7 @@ function renderSteps() {
     el.innerHTML = '<div class="nk"><div class="nw grow">' + (two ? "② 社内ラベルを読む" : "① 納入かんばんを読む") + '</div>' +
       (two ? '<button id="pendClr" class="btn small">読み直す</button>' : "") + '</div>' +
       (two ? '<div class="ns">読んだかんばん</div><div class="nv" id="nowKanban">' + esc(kv === null ? p.raw : kv) + '</div>' +
-        '<div class="ni" id="nowInfo">' + (lk.group ? esc(groupHinban(lk.group).join("・")) + "　" + esc(remainText(lk.group, sumFor(lk.group.nohin), boxesFor(lk.group.nohin), true)) :
+        '<div class="ni" id="nowInfo">' + (lk.group ? '<div class="nh" id="nowHin">' + esc(groupHinban(lk.group).join("・")) + '</div><div class="nr">' + remainHtml(remainText(lk.group, sumFor(lk.group.nohin), boxesFor(lk.group.nohin), true)) + '</div>' :
           "このかんばんの納品番号は、出荷リストに見つかりません") + '</div>' :
         '<div class="ns">1箱ごとに、かんばん → 社内ラベル の順に読みます</div>');
     var b = document.getElementById("pendClr");
