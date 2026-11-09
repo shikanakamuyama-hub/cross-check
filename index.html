@@ -60,24 +60,21 @@ h2 { font-size: 18px; margin: 18px 0 8px; }
 select.input { -webkit-appearance: none; appearance: none; }
 
 /* 読取画面 */
-.info { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.info button { text-align: left; min-height: 64px; padding: 8px 12px; border-radius: 12px;
-  border: 1px solid var(--line); background: #FFF8E6; min-width: 0; }
-.info button b { display: block; font-size: 19px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.info button small { color: var(--sub); font-size: 13px; }
-.info button.empty b { color: #C00000; }
-/* いま読むもの：① かんばん＝青 k、② 社内ラベル＝オレンジ l */
-.now { border-radius: 16px; padding: 14px 16px; color: #fff; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+/* いま読むもの：① かんばん＝青 k、② 社内ラベル＝オレンジ l。スクロールしても上に残す */
+.now { position: sticky; top: 0; z-index: 5; border-radius: 14px; padding: 10px 14px; color: #fff; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
 .now.k { background: #2F75B5; }
 .now.l { background: #C55A11; }
-.now .ns { font-size: 15px; opacity: .92; }
-.now .nw { font-size: 28px; font-weight: 800; line-height: 1.25; }
-.now .nx { font-size: 15px; margin-top: 4px; word-break: break-all; }
-.now .flow { display: flex; gap: 6px; margin-top: 10px; }
-.now .flow span { flex: 1; text-align: center; border-radius: 10px; padding: 4px 6px; font-size: 15px; background: rgba(255,255,255,.18); }
-.now .flow span.cur { background: #fff; color: #1F2328; font-weight: 800; }
-.now .flow span.done { background: rgba(255,255,255,.4); }
-.now .btn { background: #fff; color: #1F2328; border-color: transparent; }
+.now .ns { font-size: 14px; opacity: .92; }
+.now .nw { font-size: 24px; font-weight: 800; line-height: 1.25; }
+.now .nk { display: flex; gap: 10px; align-items: center; }
+.now .ni { font-size: 15px; font-weight: 700; word-break: break-all; }
+.now .nv { font-size: 30px; font-weight: 800; line-height: 1.15; word-break: break-all; }
+.now .btn { background: #fff; color: #1F2328; border-color: transparent; flex: none; min-height: 34px; }
+/* 作業者と出荷リスト（1行） */
+.infobar { display: flex; gap: 8px; margin-bottom: 8px; }
+.infobar button { flex: 1; min-width: 0; min-height: 40px; padding: 4px 10px; border-radius: 10px; border: 1px solid var(--line); background: #FFF8E6;
+  font-size: 15px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.infobar button.empty { color: #C00000; }
 .result { border-radius: 14px; padding: 14px 16px; font-size: 20px; font-weight: 700; min-height: 64px;
   background: #E7E9EC; color: var(--sub); word-break: break-all; }
 .result.ok { background: var(--ok-bg); color: var(--ok-text); }
@@ -86,9 +83,10 @@ select.input { -webkit-appearance: none; appearance: none; }
 .result.wait { background: #DDEBF7; color: #1F4E79; }
 .result small { display: block; font-size: 15px; font-weight: 400; }
 .result .big { font-size: 26px; }
-.result .kv { display: grid; grid-template-columns: auto 1fr; gap: 0 10px; font-size: 16px; font-weight: 400; margin-top: 6px; color: var(--text); }
-.result .kv b { font-weight: 700; }
 .result .remain { display: block; font-size: 30px; font-weight: 800; margin-top: 4px; }
+.result .hinq { display: flex; flex-wrap: wrap; gap: 0 14px; align-items: baseline; margin-top: 4px; color: var(--text); font-size: 18px; font-weight: 400; }
+.result .hinq b { font-size: 26px; font-weight: 800; }
+.result .subinfo { font-size: 14px; font-weight: 400; color: var(--sub); margin-top: 4px; }
 /* 全部そろったとき */
 .alldone { position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 1000; background: #0E6B0E; color: #fff;
   display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; gap: 14px; }
@@ -109,11 +107,6 @@ select.input { -webkit-appearance: none; appearance: none; }
 .cam .camNow { position: absolute; left: 0; right: 0; top: 0; padding: 6px 8px; text-align: center; color: #fff; font-size: 18px; font-weight: 800; }
 .cam .camNow.k { background: rgba(47,117,181,.88); }
 .cam .camNow.l { background: rgba(197,90,17,.88); }
-.scan-input { font-size: 20px; min-height: 60px; border: 3px solid var(--accent); background: #EEF5FC; }
-.scan-input.k { border-color: #2F75B5; background: #EEF5FC; }
-.scan-input.l { border-color: #C55A11; background: #FBE5D6; }
-.scan-box { flex: 1; min-width: 0; border: 3px solid #2F75B5; background: #EEF5FC; border-radius: 12px; padding: 12px; min-height: 60px; font-size: 18px; font-weight: 700; text-align: center; }
-.scan-box.l { border-color: #C55A11; background: #FBE5D6; }
 .scan-grid { display: grid; gap: 12px; }
 @media (min-width: 860px) {
   .scan-grid { grid-template-columns: 1fr 1fr; align-items: start; }
@@ -216,7 +209,7 @@ select.input { -webkit-appearance: none; appearance: none; }
    出荷リストが古いことがあるので、リスト外・品番違い・数量オーバーは止めずに「注意」として記録する。
    記録は端末の中（localStorage）にだけ保存し、ネットには送らない。CSV でパソコンへ渡す。 */
 
-var APP_VERSION = "1.3.0";
+var APP_VERSION = "1.4.0";
 var IS_ANDROID = /Android/i.test(navigator.userAgent);
 var IS_WINDOWS = /Windows/i.test(navigator.userAgent);
 var LS_SET = "niten.settings.v1";
@@ -529,12 +522,10 @@ function processScan(raw, source) {
   }
   if (cur.type === "kanban") {
     // ① かんばん（② を待っている間にもう一度かんばんを読んだら、読み直し）
-    var again = !!p, lk = kanbanLookup(raw);
     S.pend = cur; saveAll();
-    setResult("wait", (again ? "かんばんを読み直しました" : "① かんばん OK") + "　→ 次は ② 社内ラベル を読んでください",
-      (lk.group ? "出荷リスト No." + lk.group.rows[0].no + "　納品番号 " + lk.group.nohin + "　" + groupHinban(lk.group).join("・") +
-        "　（" + remainText(lk.group, sumFor(lk.group.nohin), boxesFor(lk.group.nohin), true) + "）" :
-        "（このかんばんの納品番号は出荷リストに見つかりません）") + "　読んだ内容：" + raw + "　" + how);
+    // 読んだ内容は「いま読むもの」に出す。結果の欄には前の箱の結果を残す
+    if (lastResult && !lastResult.pair) lastResult = null;
+    showResult(true);
     beep("step");
     renderSteps();
     return;
@@ -556,6 +547,7 @@ function finishPair(kb, lb, how) {
     setResult("ng", "NG　誤品です（納品番号が違います）",
       "かんばん：" + (v === null ? kb.raw : (v || "（取り出せません）") + "　（読んだ内容 " + kb.raw + "）") +
       "　／　社内ラベル：" + lb.nohin + "　この箱は数に入れていません。正しい組み合わせを読み直してください");
+    lastResult.pair = true;
     beep("ng");
     renderSteps(); renderRecent();
     return;
@@ -621,22 +613,17 @@ function showPairResult(rec, g) {
   var row = g ? g.rows[0] : null, m = masterOf(hin);
   var kishu = row && row.kishu ? row.kishu : (m ? m.kishu : ""), iri = row && row.irisu ? row.irisu : (m ? m.irisu : "");
   var sum = sumFor(rec.nohin), boxes = boxesFor(rec.nohin);
-  var kv = '<div class="kv">' +
-    '<span>品番</span><b>' + esc(hin || "-") + '</b>' +
-    (row && row.hinmei ? '<span>品名</span><span>' + esc(row.hinmei) + '</span>' : "") +
-    '<span>機種</span><span>' + esc(kishu || "-") + '</span>' +
-    '<span>通函最大入り数</span><span>' + esc(iri || "-") + '</span>' +
-    '<span>この箱の入数</span><b>' + fmtNum(rec.qty) + '</b>' +
-    (g ? '<span>この納品番号</span><b>' + fmtNum(sum) + ' / ' + fmtNum(g.qty) + '　（' + boxes + (g.labels ? ' / ' + g.labels : "") + ' 箱）</b>' :
-      '<span>この納品番号</span><b>' + fmtNum(sum) + '（' + boxes + ' 箱）</b>') +
-    '</div>';
+  // 品番と入数を大きく。そのほかは小さく1行に
+  var kv = '<div class="hinq"><b>' + esc(hin || "-") + '</b><span>入数 <b>' + fmtNum(rec.qty) + '</b></span></div>' +
+    '<div class="subinfo">' + [row && row.hinmei ? esc(row.hinmei) : "", "機種 " + esc(kishu || "-"), "最大 " + esc(iri || "-"),
+      "この納品番号 " + fmtNum(sum) + (g ? " / " + fmtNum(g.qty) : "") + "（" + boxes + (g && g.labels ? " / " + g.labels : "") + " 箱）"].filter(Boolean).join("　／　") + '</div>';
   var head;
   if (rec.warn) head = "注意　No." + rec.no + "　" + rec.warn;
   else if (g && sum === g.qty) head = "OK　No." + rec.no + "　納品番号 " + rec.nohin + " がそろいました";
   else head = "OK　No." + rec.no + "　納品番号 " + rec.nohin;
   lastResult = { cls: rec.warn ? "warn" : "ok", html: '<span class="big">' + esc(head) + '</span>' +
     (g ? '<span class="remain">' + esc(remainText(g, sum, boxes)) + '</span>' : "") + kv +
-    (rec.warn ? '<small style="margin-top:6px">記録しました。出荷リストが古いことがあるので、パソコンで確かめてください。</small>' : "") };
+    (rec.warn ? '<small style="margin-top:6px">記録しました。出荷リストが古いことがあるので、パソコンで確かめてください。</small>' : ""), pair: true };
   showResult(true);
 }
 function setResult(cls, text, sub) {
@@ -890,29 +877,30 @@ function renderScan() {
   else if (shortNohinWarning()) banner += '<div class="banner">納品番号が短いので、設定の「納入かんばんの読み方」を確かめてください（誤品を見逃さないため）。</div>';
   var cnt = L ? Object.keys(listIndex()).length : 0;
   return banner +
-    '<h1>2点照合</h1>' +
-    '<div class="scan-grid"><div>' +
+    // 作業者と出荷リストは1行に
+    '<div class="infobar">' +
+    '<button id="btnTanto" class="' + (S.tanto ? "" : "empty") + '">' + esc(S.tanto || "作業者：未入力（タップ）") + '</button>' +
+    '<button id="btnList" class="' + (L ? "" : "empty") + '">' + (L ? (L.loadDay ? "積込 " + esc(L.loadDay.slice(5)) : esc(String(L.loaded || "").slice(5, 16)) + " 取り込み") + "　" + cnt + " 件" : "出荷リスト：なし（タップ）") + '</button>' +
+    '</div>' +
+    // 「いま読むもの」はスクロールしても上に残す
     '<div id="now" class="now k"></div>' +
+    '<div class="scan-grid"><div>' +
     '<div id="result" class="result"></div>' +
-    '<div class="card" style="margin-top:12px"><div class="info">' +
-    '<button id="btnTanto" class="' + (S.tanto ? "" : "empty") + '"><small>作業者</small><b>' + esc(S.tanto || "未入力（タップ）") + '</b></button>' +
-    '<button id="btnList" class="' + (L ? "" : "empty") + '"><small>出荷リスト' + (L ? "（" + cnt + " 件・" + (L.loadDay ? "積込 " + esc(L.loadDay.slice(5)) : esc(String(L.loaded || "").slice(5, 16)) + " 取り込み") + "）" : "") + '</small><b>' + esc(L ? L.name : "なし（タップ）") + '</b></button>' +
-    '</div></div>' +
-    '</div><div>' +
-    '<div class="card">' +
-    '<div class="seg" id="inSeg"><button data-in="camera"' + (S.input === "camera" ? ' class="sel"' : "") + '>カメラ</button>' +
-    '<button data-in="scanner"' + (S.input === "scanner" ? ' class="sel"' : "") + '>スキャナ</button></div>' +
-    (S.input === "camera" ?
+    (S.input === "camera" ? '<div class="card" style="margin-top:12px">' + inputSeg() +
       '<button id="camBtn" class="btn primary block" style="min-height:60px;font-size:19px">カメラで読む</button>' +
       '<div id="camBox" class="hidden" style="margin-top:10px"><div class="cam"><video id="video" playsinline muted autoplay></video>' +
       '<div class="frame k" id="camFrame"></div><div class="camNow k" id="camNow"></div><div class="camMsg" id="camMsg"></div></div>' +
-      '<button id="camSwitch" class="btn small block hidden" style="margin-top:8px">⇄ カメラを切り替え（前面／背面）</button></div>' :
-      '<div class="muted">スキャナ（Bluetooth・USB）は、この画面のまま読めます。読み終わると結果が出ます。</div>' +
-      '<div class="row"><div id="scanBox" class="scan-box k"></div>' +
-      '<button id="manualBtn" class="btn" style="min-height:60px">手で入れる</button></div>') +
-    '</div>' +
+      '<button id="camSwitch" class="btn small block hidden" style="margin-top:8px">⇄ カメラを切り替え（前面／背面）</button></div></div>' : "") +
+    '</div><div>' +
     '<div class="card"><div class="row"><b class="grow">最近の記録</b><span class="muted" id="recCount"></span></div><div id="recent" style="margin-top:8px"></div></div>' +
+    (S.input === "scanner" ? '<div class="card"><div class="row">' + inputSeg() +
+      '<button id="manualBtn" class="btn small">手で入れる</button></div>' +
+      '<div class="muted" style="margin-top:6px">スキャナは、この画面のまま読めます。</div></div>' : "") +
     '</div></div>';
+}
+function inputSeg() {
+  return '<div class="seg grow" id="inSeg"><button data-in="camera"' + (S.input === "camera" ? ' class="sel"' : "") + '>カメラ</button>' +
+    '<button data-in="scanner"' + (S.input === "scanner" ? ' class="sel"' : "") + '>スキャナ</button></div>';
 }
 // 出荷リストが、今日より前に取り込んだもので、今日まだ確かめていないか（同じリストを何日か使うときは、1日に1回確かめる）
 function todayText() { return nowText().slice(0, 10); }
@@ -961,12 +949,13 @@ function renderSteps() {
   if (el) {
     var kv = two ? kanbanValue(p.raw) : null;
     el.className = "now " + cls;
-    el.innerHTML = '<div class="ns">いま読むもの（' + (two ? 2 : 1) + ' / 2）</div>' +
-      '<div class="nw">' + (two ? "② 社内ラベル（QR）" : "① 納入かんばん（バーコード）") + '</div>' +
-      '<div class="nx">' + (two ? "読んだかんばん：" + esc(kv === null ? p.raw : kv) : "1箱ごとに、かんばん → 社内ラベル の順に読みます") + '</div>' +
-      '<div class="flow"><span class="' + (two ? "done" : "cur") + '">① かんばん' + (two ? "　✓" : "") + '</span>' +
-      '<span class="' + (two ? "cur" : "") + '">② 社内ラベル</span></div>' +
-      (two ? '<button id="pendClr" class="btn small block" style="margin-top:10px">かんばんを読み直す（やめる）</button>' : "");
+    var lk = two ? kanbanLookup(p.raw) : null;
+    el.innerHTML = '<div class="nk"><div class="nw grow">' + (two ? "② 社内ラベルを読む" : "① 納入かんばんを読む") + '</div>' +
+      (two ? '<button id="pendClr" class="btn small">読み直す</button>' : "") + '</div>' +
+      (two ? '<div class="ns">読んだかんばん</div><div class="nv" id="nowKanban">' + esc(kv === null ? p.raw : kv) + '</div>' +
+        '<div class="ni" id="nowInfo">' + (lk.group ? esc(groupHinban(lk.group).join("・")) + "　" + esc(remainText(lk.group, sumFor(lk.group.nohin), boxesFor(lk.group.nohin), true)) :
+          "このかんばんの納品番号は、出荷リストに見つかりません") + '</div>' :
+        '<div class="ns">1箱ごとに、かんばん → 社内ラベル の順に読みます</div>');
     var b = document.getElementById("pendClr");
     if (b) b.onclick = function () {
       S.pend = null; saveAll();
@@ -978,19 +967,18 @@ function renderSteps() {
   if (cn) { cn.className = "camNow " + cls; cn.textContent = two ? "② 社内ラベル（QR）を読む" : "① 納入かんばん（バーコード）を読む"; }
   var fr = document.getElementById("camFrame");
   if (fr) fr.className = "frame " + cls;
-  var sb = document.getElementById("scanBox");
-  if (sb) { sb.className = "scan-box " + cls; sb.textContent = two ? "スキャナで ② 社内ラベルを読む" : "スキャナで ① 納入かんばんを読む"; }
 }
 function showResult(flash) {
   var el = document.getElementById("result");
   if (!el) return;
   if (!lastResult) {
-    el.className = "result";
-    el.innerHTML = !S.tanto ? "まず作業者を入れてください" : !L ? "出荷リストを入れてください" : "① 納入かんばん → ② 社内ラベル の順に読んでください";
+    // 読む前は、足りないものがあるときだけ出す
+    el.className = "result" + (S.tanto && L ? " hidden" : "");
+    el.innerHTML = !S.tanto ? "まず作業者を入れてください" : !L ? "出荷リストを入れてください" : "";
     return;
   }
   el.className = "result" + (lastResult.cls ? " " + lastResult.cls : "");
-  el.innerHTML = lastResult.html;
+  el.innerHTML = (S.pend && lastResult.pair ? "<small>前の箱の結果</small>" : "") + lastResult.html;
   if (flash) { el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash"); }
 }
 function renderRecent() {
