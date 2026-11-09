@@ -116,8 +116,9 @@ select.input { -webkit-appearance: none; appearance: none; }
 @media (min-width: 860px) {
   .scan-grid { grid-template-columns: 1fr 1fr; align-items: start; }
 }
-.subacts { display: flex; justify-content: center; gap: 8px; margin: 4px 0 12px; }
-.linkbtn { min-height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: none; color: var(--sub); font-size: 14px; }
+.modebar { display: flex; gap: 8px; margin: 4px 0 12px; }
+.modebar button { flex: 1; min-width: 0; min-height: 48px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--text); font-size: 16px; font-weight: 700; }
+.modebar button.sel { background: var(--accent); border-color: var(--accent); color: #fff; }
 .seg { display: flex; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin-bottom: 10px; }
 .seg button { flex: 1; min-height: 46px; border: 0; background: #fff; font-weight: 600; }
 .seg button + button { border-left: 1px solid var(--line); }
@@ -219,7 +220,7 @@ select.input { -webkit-appearance: none; appearance: none; }
    出荷リストが古いことがあるので、リスト外・品番違い・数量オーバーは止めずに「注意」として記録する。
    記録は端末の中（localStorage）にだけ保存し、ネットには送らない。CSV でパソコンへ渡す。 */
 
-var APP_VERSION = "1.4.6";
+var APP_VERSION = "1.5.0";
 var IS_ANDROID = /Android/i.test(navigator.userAgent);
 var IS_WINDOWS = /Windows/i.test(navigator.userAgent);
 var LS_SET = "niten.settings.v1";
@@ -257,7 +258,7 @@ function loadAll() {
   if (typeof S.seq !== "number") S.seq = 0;
   if (typeof S.sound !== "boolean") S.sound = true;
   if (typeof S.camId !== "string") S.camId = "";
-  if (S.input !== "camera" && S.input !== "scanner") S.input = "scanner";
+  if (S.input !== "camera" && S.input !== "scanner" && S.input !== "manual") S.input = "scanner";
   S.qrFmt = DEFAULT_QR;   // 社内ラベルのQRは3項目に固定（前の版で変えていても戻す）
   if (!S.kb || typeof S.kb !== "object") S.kb = {};
   if (!KB_MODES.some(function (m) { return m.v === S.kb.mode; })) S.kb.mode = "whole";
@@ -706,19 +707,21 @@ function startCamera() {
   if (cam.stream) return;
   var msgEl = document.getElementById("camMsg");
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    camFailed();
     alert("この画面ではカメラを使えません。\nホーム画面のアイコンから開いているか、https の住所で開いているかを確かめてください。\nカメラが使えないときは「スキャナ」に切り替えて読んでください。");
     return;
   }
   document.getElementById("camBox").classList.remove("hidden");
-  document.getElementById("camBtn").textContent = "カメラを止める";
   if (msgEl) msgEl.textContent = "カメラを準備しています…";
+  cam.req = (cam.req || 0) + 1;
   cam.autoTried = false;
   openStream(cameraConstraints(), true);
 }
 function openStream(constraints, allowRetry) {
+  var rq = cam.req;
   navigator.mediaDevices.getUserMedia(constraints)
     .then(function (stream) {
-      if (!document.getElementById("camBox") || document.getElementById("camBox").classList.contains("hidden")) {
+      if (rq !== cam.req || !document.getElementById("camBox") || document.getElementById("camBox").classList.contains("hidden")) {
         stream.getTracks().forEach(function (t) { t.stop(); });   // 準備中に止められた
         return;
       }
@@ -744,15 +747,23 @@ function openStream(constraints, allowRetry) {
       cam.timer = setTimeout(camLoop, 300);
     })
     .catch(function (e) {
+      if (rq !== cam.req) return;   // 準備中に止められた
       // 前に選んだカメラが無くなっていたら、選び直す
       if (allowRetry && S.camId) { S.camId = ""; saveAll(); openStream(cameraConstraints(), false); return; }
       stopCamera();
+      camFailed();
       alert("カメラを使えませんでした（" + (e && e.name ? e.name : e) + "）。\n" + (IS_ANDROID ?
         "Chrome のアドレス欄の左のマーク →「権限」→ カメラ を「許可」にしてください。\n（または 設定 → アプリ → Chrome → 権限 → カメラ）" :
         IS_WINDOWS ?
         "Edge のアドレス欄の左のマーク → カメラ を「許可」にしてください。\nまた、Windows の 設定 → プライバシーとセキュリティ → カメラ で、カメラへのアクセスを「オン」にしてください。" :
         "設定 → アプリ → Safari → カメラ を「許可」にしてください。"));
     });
+}
+// カメラが使えなかったとき：画面を開き直すたびに同じ案内を出さないように覚えておく（「カメラ」を押すともう一度試す）
+function camFailed() {
+  cam.failed = true;
+  var el = document.getElementById("camFail");
+  if (el) el.classList.remove("hidden");
 }
 function trackLabel(stream) {
   var t = stream && stream.getVideoTracks()[0];
@@ -796,9 +807,9 @@ function stopCamera() {
   clearTimeout(cam.timer); cam.timer = 0;
   if (cam.stream) { cam.stream.getTracks().forEach(function (t) { t.stop(); }); }
   cam.stream = null;
-  var box = document.getElementById("camBox"), btn = document.getElementById("camBtn");
+  cam.req = (cam.req || 0) + 1;
+  var box = document.getElementById("camBox");
   if (box) box.classList.add("hidden");
-  if (btn) btn.textContent = "カメラで読む";
 }
 function camLoop() {
   if (!cam.stream) return;
@@ -901,13 +912,19 @@ function renderScan() {
     '<div class="scan-grid"><div>' +
     '<div id="result" class="result"></div>' +
     (S.input === "camera" ? '<div class="card" style="margin-top:12px">' +
-      '<button id="camBtn" class="btn primary block" style="min-height:60px;font-size:19px">カメラで読む</button>' +
-      '<div id="camBox" class="hidden" style="margin-top:10px"><div class="cam"><video id="video" playsinline muted autoplay></video>' +
+      '<div id="camFail" class="muted hidden">カメラを使えませんでした。下の「カメラ」をもう一度押すか、「スキャナ」に切り替えてください。</div>' +
+      '<div id="camBox" class="hidden"><div class="cam"><video id="video" playsinline muted autoplay></video>' +
       '<div class="frame k" id="camFrame"></div><div class="camNow k" id="camNow"></div><div class="camMsg" id="camMsg"></div></div>' +
       '<button id="camSwitch" class="btn small block hidden" style="margin-top:8px">⇄ カメラを切り替え（前面／背面）</button></div></div>' : "") +
+    (S.input === "manual" ? '<div class="card" style="margin-top:12px"><div class="row">' +
+      '<input id="manualIn" class="input grow" type="url" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done">' +
+      '<button id="manualOk" class="btn primary">決定</button></div></div>' : "") +
     '</div><div>' +
     '<div class="card"><div class="row"><b class="grow">最近の記録</b><span class="muted" id="recCount"></span></div><div id="recent" style="margin-top:8px"></div></div>' +
-    '<div class="subacts">' + (S.input === "scanner" ? '<button id="manualBtn" class="linkbtn">手で入れる</button><button data-in="camera" class="linkbtn">カメラで読む</button>' : '<button data-in="scanner" class="linkbtn">スキャナに戻す</button>') + '</div>' +
+    // 読み方：今使っているものに色を付ける
+    '<div class="modebar" id="modeBar">' + [["scanner", "スキャナ"], ["camera", "カメラ"], ["manual", "手入力"]].map(function (m) {
+      return '<button data-in="' + m[0] + '"' + (S.input === m[0] ? ' class="sel"' : "") + '>' + m[1] + '</button>';
+    }).join("") + '</div>' +
     '</div></div>';
 }
 // 出荷リストが、今日より前に取り込んだもので、今日まだ確かめていないか（同じリストを何日か使うときは、1日に1回確かめる）
@@ -934,17 +951,17 @@ function bindScan() {
     if (L) { tab = "prog"; render(); window.scrollTo(0, 0); } else importListFile();
   };
   Array.prototype.forEach.call(document.querySelectorAll("[data-in]"), function (b) {
-    b.onclick = function () { S.input = b.getAttribute("data-in"); saveAll(); render(); };
+    b.onclick = function () { S.input = b.getAttribute("data-in"); cam.failed = false; saveAll(); render(); };
   });
   if (S.input === "camera") {
-    document.getElementById("camBtn").onclick = function () { if (cam.stream || !document.getElementById("camBox").classList.contains("hidden")) stopCamera(); else startCamera(); };
     document.getElementById("camSwitch").onclick = nextCamera;
-  } else {
-    document.getElementById("manualBtn").onclick = function () {
-      openManual(S.pend ? "② 社内ラベルを手で入れる" : "① 納入かんばんを手で入れる",
-        S.pend ? "社内ラベルは 納品番号,品番,入数 の形で入れます。" : "納入かんばんの内容を入れます。",
-        function (v) { processScan(v, "scanner"); });
-    };
+    if (cam.failed) document.getElementById("camFail").classList.remove("hidden"); else startCamera();
+  } else if (S.input === "manual") {
+    var mi = document.getElementById("manualIn");
+    var mok = function () { var v = mi.value; mi.value = ""; processScan(v, "manual"); mi.focus(); };
+    document.getElementById("manualOk").onclick = mok;
+    mi.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.keyCode === 13) { e.preventDefault(); mok(); } });
+    setTimeout(function () { if (!document.getElementById("modalRoot").innerHTML) mi.focus(); }, 50);
   }
   showResult(false);
   renderSteps();
@@ -960,7 +977,7 @@ function renderSteps() {
     var lk = two ? kanbanLookup(p.raw) : null;
     el.innerHTML = '<div class="nk"><div class="nw grow">' + (two ? "② 社内ラベルを読む" : "① 納入かんばんを読む") + '</div>' +
       (two ? '<button id="pendClr" class="btn small">読み直す</button>' : "") + '</div>' +
-      '<div class="nhow" id="nowHow">' + (S.input === "scanner" ? (two ? "スキャナで読んでください" : "スキャナで読んでください（画面のタップは不要）") : "下の「カメラで読む」で読んでください") + '</div>' +
+      '<div class="nhow" id="nowHow">' + (S.input === "scanner" ? (two ? "スキャナで読んでください" : "スキャナで読んでください（画面のタップは不要）") : S.input === "camera" ? "カメラの枠に入れて読んでください" : "下の欄に入れて「決定」を押してください") + '</div>' +
       (two ? '<div class="ns">読んだかんばん</div><div class="nv" id="nowKanban">' + esc(kv === null ? p.raw : kv) + '</div>' +
         '<div class="ni" id="nowInfo">' + (lk.group ? '<div class="nh" id="nowHin">' + esc(groupHinban(lk.group).join("・")) + '</div><div class="nr">' + remainHtml(remainText(lk.group, sumFor(lk.group.nohin), boxesFor(lk.group.nohin), true)) + '</div>' :
           "このかんばんの納品番号は、出荷リストに見つかりません") + '</div>' :
@@ -976,6 +993,8 @@ function renderSteps() {
   if (cn) { cn.className = "camNow " + cls; cn.textContent = two ? "② 社内ラベル（QR）を読む" : "① 納入かんばん（バーコード）を読む"; }
   var fr = document.getElementById("camFrame");
   if (fr) fr.className = "frame " + cls;
+  var mi = document.getElementById("manualIn");
+  if (mi) mi.placeholder = two ? "② 納品番号,品番,入数" : "① 納入かんばんの番号";
 }
 function showResult(flash) {
   var el = document.getElementById("result");
