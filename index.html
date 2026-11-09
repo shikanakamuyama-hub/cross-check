@@ -214,7 +214,7 @@ select.input { -webkit-appearance: none; appearance: none; }
    出荷リストが古いことがあるので、リスト外・品番違い・数量オーバーは止めずに「注意」として記録する。
    記録は端末の中（localStorage）にだけ保存し、ネットには送らない。CSV でパソコンへ渡す。 */
 
-var APP_VERSION = "1.2.1";
+var APP_VERSION = "1.2.2";
 var IS_ANDROID = /Android/i.test(navigator.userAgent);
 var IS_WINDOWS = /Windows/i.test(navigator.userAgent);
 var LS_SET = "niten.settings.v1";
@@ -452,10 +452,11 @@ function kanbanLookup(raw) {
 
 // スキャナの欄。Enter・Tab が届けば確定。届かない端末でも、文字が一気に入って止まったらスキャナとみて確定する。
 // 手で打っているとき（文字の間隔が長い・消した）は自動で確定しない（「決定」か Enter で確定）
-var SCAN_IDLE_MS = 300, SCAN_FAST_MS = 80;
+// 止まったと見る時間は、文字の間隔の4倍（速いスキャナほど短い。途中で切れないように 150ms より短くしない）
+var SCAN_IDLE_MIN = 150, SCAN_IDLE_MAX = 300, SCAN_FAST_MS = 80;
 function bindScanField(inp, take) {
-  var timer = 0, first = 0, last = 0, prevLen = 0, manual = false;
-  function reset() { clearTimeout(timer); timer = 0; first = 0; last = 0; prevLen = 0; manual = false; }
+  var timer = 0, first = 0, last = 0, prevLen = 0, manual = false, maxGap = 0;
+  function reset() { clearTimeout(timer); timer = 0; first = 0; last = 0; prevLen = 0; manual = false; maxGap = 0; }
   function done() { var v = inp.value; inp.value = ""; reset(); take(v); }
   function check() {
     var n = inp.value.length;
@@ -471,8 +472,9 @@ function bindScanField(inp, take) {
     if (!n) { reset(); return; }
     if (n < prevLen) manual = true;
     if (!first) first = now;
+    if (last) maxGap = Math.max(maxGap, now - last);
     last = now; prevLen = n;
-    timer = setTimeout(check, SCAN_IDLE_MS);
+    timer = setTimeout(check, Math.min(SCAN_IDLE_MAX, Math.max(SCAN_IDLE_MIN, maxGap * 4)));
   });
   return done;
 }
