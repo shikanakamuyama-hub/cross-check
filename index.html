@@ -64,6 +64,13 @@ select.input { -webkit-appearance: none; appearance: none; }
 .now { position: sticky; top: 0; z-index: 5; border-radius: 14px; padding: 10px 14px; color: #fff; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
 .now.k { background: #2F75B5; }
 .now.l { background: #C55A11; }
+.now.f { background: #548235; }
+/* 出荷照合／フリー在庫照合の切り替え */
+.workbar { display: flex; gap: 8px; margin-bottom: 8px; }
+.workbar button { flex: 1; min-width: 0; min-height: 46px; border: 2px solid var(--line); border-radius: 10px; background: #fff; color: var(--sub); font-size: 16px; font-weight: 700; }
+.workbar button.sel { color: #fff; }
+.workbar button.sel.ship { background: var(--head); border-color: var(--head); }
+.workbar button.sel.free { background: #548235; border-color: #548235; }
 .now .ns { font-size: 14px; opacity: .92; }
 .now .nhow { font-size: 16px; font-weight: 700; }
 .now .nw { font-size: 22px; font-weight: 800; line-height: 1.25; }
@@ -109,9 +116,11 @@ select.input { -webkit-appearance: none; appearance: none; }
   font-size: 15px; text-shadow: 0 1px 2px #000; }
 .cam .frame.k { border-color: #BDD7EE; }
 .cam .frame.l { left: 24%; width: 52%; top: 12%; height: 76%; border-color: #F8CBAD; }
+.cam .frame.f { left: 24%; width: 52%; top: 12%; height: 76%; border-color: #C5E0B4; }
 .cam .camNow { position: absolute; left: 0; right: 0; top: 0; padding: 6px 8px; text-align: center; color: #fff; font-size: 18px; font-weight: 800; }
 .cam .camNow.k { background: rgba(47,117,181,.88); }
 .cam .camNow.l { background: rgba(197,90,17,.88); }
+.cam .camNow.f { background: rgba(84,130,53,.88); }
 .scan-grid { display: grid; gap: 12px; }
 @media (min-width: 860px) {
   .scan-grid { grid-template-columns: 1fr 1fr; align-items: start; }
@@ -218,14 +227,20 @@ select.input { -webkit-appearance: none; appearance: none; }
    ・2つの納品番号が同じか（誤品）を調べる。違えば NG
    ・出荷リストの納品数と、納品番号ごとに読んだ入数の合計を比べる（過不足）
    出荷リストが古いことがあるので、リスト外・品番違い・数量オーバーは止めずに「注意」として記録する。
-   記録は端末の中（localStorage）にだけ保存し、ネットには送らない。CSV でパソコンへ渡す。 */
+   記録は端末の中（localStorage）にだけ保存し、ネットには送らない。CSV でパソコンへ渡す。
+   版1.6.0：「フリー在庫照合」を追加。フリー在庫の箱から引き抜いた品に貼った社内ラベルを、箱の「フリー在庫札」（QR＝品番だけ）と
+   品番どうしで照合する。① 札 → ② 社内ラベル の順。出荷リストは使わない。記録は出荷照合の記録とは別（F、LS_FREE）。 */
 
-var APP_VERSION = "1.5.0";
+var APP_VERSION = "1.8.0";   // 1.8.0：フリー在庫照合は品番照合だけ（1.7.0 の「引き抜いた数」の入力をやめた。数は札に手書き）
 var IS_ANDROID = /Android/i.test(navigator.userAgent);
 var IS_WINDOWS = /Windows/i.test(navigator.userAgent);
 var LS_SET = "niten.settings.v1";
 var LS_LIST = "niten.list.v1";
 var LS_REC = "niten.records.v1";
+var LS_FREE = "niten.free.v1";
+// フリー在庫照合の記録CSV。出荷照合の記録として取り込まれないように「納品番号」「入数」の見出しを使わない
+var FREE_CSV_HEAD = ["No.", "日時", "作業者", "結果", "内容", "札の品番", "ラベルの品番", "ラベルの納品番号", "ラベルの入数",
+  "札（読んだ内容）", "社内ラベル（読んだ内容）", "取消", "取消日時", "端末名", "ID"];
 var DEFAULT_QR = "納品番号,品番,入数";
 var KB_MODES = [
   { v: "whole", name: "全体が同じならOK（おすすめ）", memo: "かんばんの中身（納入品番＝納品番号）が、社内ラベルの納品番号と同じならOKにします。" },
@@ -239,6 +254,7 @@ var CSV_HEAD = ["No.", "日時", "作業者", "結果", "注意", "納品番号"
 var S = null;        // 設定
 var L = null;        // 出荷リスト
 var R = [];          // 記録
+var F = [];          // フリー在庫照合の記録
 var tab = "scan";
 var saveError = "";
 var listFilter = "";
@@ -247,10 +263,11 @@ var lastResult = null;
 
 /* ---------------- 保存 ---------------- */
 function loadAll() {
-  S = null; L = null; R = [];
+  S = null; L = null; R = []; F = [];
   try { S = JSON.parse(localStorage.getItem(LS_SET) || "null"); } catch (e) { S = null; }
   try { L = JSON.parse(localStorage.getItem(LS_LIST) || "null"); } catch (e) { L = null; }
   try { R = JSON.parse(localStorage.getItem(LS_REC) || "[]") || []; } catch (e) { R = []; }
+  try { F = JSON.parse(localStorage.getItem(LS_FREE) || "[]") || []; } catch (e) { F = []; }
   if (!S || typeof S !== "object") S = {};
   if (typeof S.tanto !== "string") S.tanto = "";
   if (!Array.isArray(S.tantos)) S.tantos = [];
@@ -272,12 +289,18 @@ function loadAll() {
   if (!L || typeof L !== "object" || !Array.isArray(L.rows)) L = null;
   if (L && (!L.master || typeof L.master !== "object")) L.master = {};
   if (!Array.isArray(R)) R = [];
+  if (!Array.isArray(F)) F = [];
+  if (S.work !== "free") S.work = "ship";
+  if (typeof S.fseq !== "number") S.fseq = 0;
+  if (!S.fpend || typeof S.fpend !== "object" || !S.fpend.hinban) S.fpend = null;
+  delete S.fwait;   // 1.7.0 の「引き抜いた数」待ち（1.8.0 でやめた）
 }
 function saveAll() {
   try {
     localStorage.setItem(LS_SET, JSON.stringify(S));
     localStorage.setItem(LS_LIST, JSON.stringify(L));
     localStorage.setItem(LS_REC, JSON.stringify(R));
+    localStorage.setItem(LS_FREE, JSON.stringify(F));
     saveError = "";
   } catch (e) {
     saveError = "端末に保存できませんでした（" + e.message + "）。すぐに「記録をCSVで書き出す」をしてください。";
@@ -463,7 +486,7 @@ var SCAN_IDLE_MIN = 150, SCAN_IDLE_MAX = 300;
 var keyBuf = "", keyLast = 0, keyGap = 0, keyTimer = 0, modalKeySink = null, kbtRaw = "";
 function keySink() {
   if (document.getElementById("modalRoot").innerHTML) return modalKeySink;
-  if (tab === "scan") return S.input === "scanner" ? function (v) { processScan(v, "scanner"); } : null;
+  if (tab === "scan") return S.input === "scanner" ? function (v) { scanIn(v, "scanner"); } : null;
   if (tab === "set") return function (v) { kbtRaw = v; kbTest(); };
   return null;
 }
@@ -501,6 +524,80 @@ function openManual(title, hint, onOk) {
       inp.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.keyCode === 13) { e.preventDefault(); ok(); } });
       setTimeout(function () { inp.focus(); }, 50);
     });
+}
+
+// 読んだものを、いまの照合（出荷照合／フリー在庫照合）へ渡す
+function scanIn(raw, source) {
+  // 画面（数の入力など）を開いている間は、カメラに写ったものを読まない
+  if (source === "camera" && document.getElementById("modalRoot").innerHTML) return;
+  if (S.work === "free") processFree(raw, source); else processScan(raw, source);
+}
+function isFree() { return S.work === "free"; }
+function curPend() { return isFree() ? S.fpend : S.pend; }
+function curRecs() { return isFree() ? F : R; }
+
+/* ---------------- フリー在庫照合 ---------------- */
+// ① フリー在庫札（QR＝品番だけ） → ② 社内ラベル（QR＝納品番号,品番,入数）の順に読み、品番が同じか調べる。出荷リストは使わない
+function processFree(raw, source) {
+  raw = cleanText(raw);
+  if (!raw) return;
+  if (!S.tanto.trim()) { setResult("ng", "NG　作業者を入れてから読んでください", "記録していません　読んだ内容：" + raw); beep("ng"); return; }
+  var lab = parseLabel(raw);
+  if (!lab) {
+    var why = labelProblem(raw);
+    if (why) {
+      setResult("ng", "NG　社内ラベルとして読めません（" + why + "）", "読んだ内容：" + raw + "　記録していません");
+      beep("ng");
+      return;
+    }
+  }
+  var p = S.fpend;
+  if (lab && !p) {
+    setResult("ng", "NG　先に ① フリー在庫札 を読んでください",
+      "いま読んだのは社内ラベルです（読んだ内容：" + raw + "）。順番は ① フリー在庫札 → ② 社内ラベル です。記録していません");
+    beep("ng");
+    renderSteps();
+    return;
+  }
+  if (!lab) {
+    // ① 札（② を待っている間にもう一度札を読んだら、読み直し）
+    S.fpend = { hinban: raw, raw: raw, t: nowText() }; saveAll();
+    if (lastResult && !lastResult.pair) lastResult = null;
+    showResult(true);
+    beep("step");
+    renderSteps();
+    return;
+  }
+  // ② 社内ラベル → 照合
+  S.fpend = null;
+  finishFree(p, { raw: raw, nohin: lab.nohin, hinban: lab.hinban, qty: lab.qty });
+}
+function finishFree(fu, lb) {
+  S.fseq += 1;
+  var rec = { kind: "free", id: newId(), no: S.fseq, t: nowText(), tanto: S.tanto.trim(), device: S.device.trim(),
+    result: "OK", warn: "", fudaHin: fu.hinban, hinban: lb.hinban || "", nohin: lb.nohin, qty: lb.qty,
+    fudaRaw: fu.raw, lbRaw: lb.raw, cancel: "", cancelT: "" };
+  var ok = !!rec.hinban && normKey(rec.hinban) === normKey(rec.fudaHin);
+  if (!ok) {
+    rec.result = "NG";
+    rec.warn = rec.hinban ? "品番が違う（札 " + rec.fudaHin + "／ラベル " + rec.hinban + "）" : "社内ラベルに品番が入っていない";
+  }
+  F.push(rec); saveAll();
+  if (ok) {
+    // OK：品番を大きく（数は札に手書きなので、ここでは聞かない・出さない）
+    lastResult = { cls: "ok", pair: true, html: '<span class="big">OK　No.' + rec.no + '　品番が同じです</span>' +
+      '<div class="hinq"><b>' + esc(rec.hinban) + '</b></div>' +
+      '<div class="subinfo">札の在庫数を書き直すのを忘れずに</div>' };
+    beep("ok");
+  } else {
+    lastResult = { cls: "ng", pair: true, html: '<span class="big">NG　No.' + rec.no + '　品番が違います</span>' +
+      '<div class="hinq"><span>札</span><b>' + esc(rec.fudaHin) + '</b></div>' +
+      '<div class="hinq"><span>ラベル</span><b>' + esc(rec.hinban || "（品番なし）") + '</b></div>' +
+      '<small style="margin-top:6px">記録しました。ラベルの貼り間違い・引き抜く箱の間違いがないか確かめ、正しくしてから ① 札 から読み直してください</small>' };
+    beep("ng");
+  }
+  showResult(true);
+  renderSteps(); renderRecent();
 }
 
 function processScan(raw, source) {
@@ -823,7 +920,7 @@ function camLoop() {
           cam.lastSeen = now;
         } else {
           cam.lastText = text; cam.lastSeen = now;
-          processScan(text, "camera");
+          scanIn(text, "camera");
         }
       }
     }
@@ -893,20 +990,29 @@ document.addEventListener("visibilitychange", function () { if (document.hidden)
 
 /* ---------------- 画面：読取 ---------------- */
 function renderScan() {
-  var banner = "";
+  var banner = "", free = isFree();
   if (saveError) banner += '<div class="banner">' + esc(saveError) + '</div>';
+  // 出荷照合／フリー在庫照合の切り替え（いつも一番上）
+  var work = '<div class="workbar">' +
+    '<button data-work="ship" class="ship' + (free ? "" : " sel") + '">出荷照合</button>' +
+    '<button data-work="free" class="free' + (free ? " sel" : "") + '">フリー在庫照合</button></div>';
+  if (free) return work + banner + scanBody(
+    '<button id="btnTanto" class="' + (S.tanto ? "" : "empty") + '">' + esc(S.tanto || "作業者：未入力（タップ）") + '</button>' +
+    '<button id="btnList">フリー在庫の記録 ' + F.length + ' 件</button>');
+  banner = work + banner;
   if (!L) banner += '<div class="banner">出荷リストが入っていません。設定 →「出荷リストを取り込む」で入れてください。</div>';
   else if (listIsStale()) banner += '<div class="banner stale"><b>' + esc(staleText()) + '</b>' +
     '<div class="muted" style="margin:4px 0 8px">リスト：' + esc(L.name) + '　／　違うときは、設定 →「出荷リストを取り込む」で今日のリストを入れてください。</div>' +
     '<button id="listOk" class="btn block">今日もこの出荷リストで読む</button></div>';
   else if (shortNohinWarning()) banner += '<div class="banner">納品番号が短いので、設定の「納入かんばんの読み方」を確かめてください（誤品を見逃さないため）。</div>';
   var cnt = L ? Object.keys(listIndex()).length : 0;
-  return banner +
-    // 作業者と出荷リストは1行に
-    '<div class="infobar">' +
+  return banner + scanBody(
     '<button id="btnTanto" class="' + (S.tanto ? "" : "empty") + '">' + esc(S.tanto || "作業者：未入力（タップ）") + '</button>' +
-    '<button id="btnList" class="' + (L ? "" : "empty") + '">' + (L ? (L.loadDay ? "積込 " + esc(L.loadDay.slice(5)) : esc(String(L.loaded || "").slice(5, 16)) + " 取り込み") + "　" + cnt + " 件" : "出荷リスト：なし（タップ）") + '</button>' +
-    '</div>' +
+    '<button id="btnList" class="' + (L ? "" : "empty") + '">' + (L ? (L.loadDay ? "積込 " + esc(L.loadDay.slice(5)) : esc(String(L.loaded || "").slice(5, 16)) + " 取り込み") + "　" + cnt + " 件" : "出荷リスト：なし（タップ）") + '</button>');
+}
+// 読取画面の本体（出荷照合・フリー在庫照合で共通）。info＝作業者などの1行
+function scanBody(info) {
+  return '<div class="infobar">' + info + '</div>' +
     // 「いま読むもの」はスクロールしても上に残す
     '<div id="now" class="now k"></div>' +
     '<div class="scan-grid"><div>' +
@@ -948,8 +1054,16 @@ function bindScan() {
   };
   document.getElementById("btnTanto").onclick = editTanto;
   document.getElementById("btnList").onclick = function () {
-    if (L) { tab = "prog"; render(); window.scrollTo(0, 0); } else importListFile();
+    if (isFree()) { tab = "list"; render(); window.scrollTo(0, 0); }
+    else if (L) { tab = "prog"; render(); window.scrollTo(0, 0); } else importListFile();
   };
+  Array.prototype.forEach.call(document.querySelectorAll("[data-work]"), function (b) {
+    b.onclick = function () {
+      var w = b.getAttribute("data-work");
+      if (S.work === w) return;
+      S.work = w; lastResult = null; listFilter = ""; saveAll(); render();
+    };
+  });
   Array.prototype.forEach.call(document.querySelectorAll("[data-in]"), function (b) {
     b.onclick = function () { S.input = b.getAttribute("data-in"); cam.failed = false; saveAll(); render(); };
   });
@@ -958,7 +1072,7 @@ function bindScan() {
     if (cam.failed) document.getElementById("camFail").classList.remove("hidden"); else startCamera();
   } else if (S.input === "manual") {
     var mi = document.getElementById("manualIn");
-    var mok = function () { var v = mi.value; mi.value = ""; processScan(v, "manual"); mi.focus(); };
+    var mok = function () { var v = mi.value; mi.value = ""; scanIn(v, "manual"); mi.focus(); };
     document.getElementById("manualOk").onclick = mok;
     mi.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.keyCode === 13) { e.preventDefault(); mok(); } });
     setTimeout(function () { if (!document.getElementById("modalRoot").innerHTML) mi.focus(); }, 50);
@@ -969,6 +1083,7 @@ function bindScan() {
 }
 // 「いま読むもの」を出す。① かんばん＝青、② 社内ラベル＝オレンジ（カメラの枠・スキャナの欄も同じ色）
 function renderSteps() {
+  if (isFree()) { renderFreeSteps(); return; }
   var p = S.pend, two = !!p, cls = two ? "l" : "k";
   var el = document.getElementById("now");
   if (el) {
@@ -996,26 +1111,54 @@ function renderSteps() {
   var mi = document.getElementById("manualIn");
   if (mi) mi.placeholder = two ? "② 納品番号,品番,入数" : "① 納入かんばんの番号";
 }
+// フリー在庫照合の「いま読むもの」：① 札＝緑、② 社内ラベル＝オレンジ
+function renderFreeSteps() {
+  var p = S.fpend, two = !!p, cls = two ? "l" : "f";
+  var el = document.getElementById("now");
+  if (el) {
+    el.className = "now " + cls;
+    el.innerHTML = '<div class="nk"><div class="nw grow">' + (two ? "② 社内ラベルを読む" : "① フリー在庫札を読む") + '</div>' +
+      (two ? '<button id="pendClr" class="btn small">読み直す</button>' : "") + '</div>' +
+      '<div class="nhow" id="nowHow">' + (S.input === "scanner" ? (two ? "スキャナで読んでください" : "スキャナで読んでください（画面のタップは不要）") : S.input === "camera" ? "カメラの枠に入れて読んでください" : "下の欄に入れて「決定」を押してください") + '</div>' +
+      (two ? '<div class="ns">読んだ札の品番</div><div class="nv" id="nowFuda">' + esc(p.hinban) + '</div>' +
+        '<div class="ns">引き抜いた品に貼った社内ラベルを読んでください</div>' :
+        '<div class="ns">引き抜くたびに、箱の札 → 社内ラベル の順に読みます</div>');
+    var b = document.getElementById("pendClr");
+    if (b) b.onclick = function () {
+      S.fpend = null; saveAll();
+      setResult("", "やめました。① フリー在庫札から読んでください", "");
+      renderSteps();
+    };
+  }
+  var cn = document.getElementById("camNow");
+  if (cn) { cn.className = "camNow " + cls; cn.textContent = two ? "② 社内ラベル（QR）を読む" : "① フリー在庫札（QR）を読む"; }
+  var fr = document.getElementById("camFrame");
+  if (fr) fr.className = "frame " + cls;
+  var mi = document.getElementById("manualIn");
+  if (mi) mi.placeholder = two ? "② 納品番号,品番,入数" : "① 札の品番";
+}
 function showResult(flash) {
   var el = document.getElementById("result");
   if (!el) return;
   if (!lastResult) {
     // 読む前は、足りないものがあるときだけ出す
-    el.className = "result" + (S.tanto && L ? " hidden" : "");
-    el.innerHTML = !S.tanto ? "まず作業者を入れてください" : !L ? "出荷リストを入れてください" : "";
+    var need = isFree() ? !!S.tanto : !!(S.tanto && L);
+    el.className = "result" + (need ? " hidden" : "");
+    el.innerHTML = !S.tanto ? "まず作業者を入れてください" : !L && !isFree() ? "出荷リストを入れてください" : "";
     return;
   }
   el.className = "result" + (lastResult.cls ? " " + lastResult.cls : "");
-  el.innerHTML = (S.pend && lastResult.pair ? "<small>前の箱の結果</small>" : "") + lastResult.html;
+  el.innerHTML = (curPend() && lastResult.pair ? "<small>前の" + (isFree() ? "品" : "箱") + "の結果</small>" : "") + lastResult.html;
   if (flash) { el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash"); }
 }
 function renderRecent() {
   var el = document.getElementById("recent");
   if (!el) return;
-  var list = R.slice(-3).reverse();
+  var all = curRecs(), list = all.slice(-3).reverse();
   el.innerHTML = list.length ? list.map(recHtml).join("") : '<div class="muted">まだありません</div>';
   bindRecButtons(el);
-  var c = document.getElementById("recCount"); if (c) c.textContent = R.length + "件";
+  var c = document.getElementById("recCount"); if (c) c.textContent = all.length + "件";
+  var bl = document.getElementById("btnList"); if (bl && isFree()) bl.textContent = "フリー在庫の記録 " + F.length + " 件";
 }
 function editTanto() {
   openModal('<h2 style="margin-top:0">作業者</h2>' +
@@ -1056,31 +1199,35 @@ function recHtml(r) {
     r.warn ? '<span class="tag warn">注意</span>' : '<span class="tag ok">OK</span>';
   return '<button class="rec ' + recClass(r) + '" data-id="' + esc(r.id) + '">' +
     '<div class="no">No.' + esc(r.no) + '</div>' +
-    '<div class="main"><div>' + tag + '<span class="tag">納品番号 ' + esc(r.nohin) + '</span></div>' +
+    '<div class="main"><div>' + tag + (r.kind === "free" ? '<span class="tag">札 ' + esc(r.fudaHin) + '</span>' : "") +
+    '<span class="tag">納品番号 ' + esc(r.nohin) + '</span></div>' +
     '<div class="hin">' + esc(r.hinban || "（品番なし）") + '</div>' +
     (r.warn ? '<div class="msg">' + esc(r.warn) + '</div>' : "") +
     '<div class="meta">' + esc(r.t) + '　' + esc(r.tanto || "") + (r.device ? '　[' + esc(r.device) + ']' : "") +
     (r.cancel ? '　取消 ' + esc(r.cancelT) : "") + '</div></div>' +
-    '<div class="qty">' + esc(r.qty) + '</div></button>';
+    '<div class="qty">' + (r.kind === "free" ? "" : esc(r.qty)) + '</div></button>';
 }
 function bindRecButtons(root) {
   Array.prototype.forEach.call(root.querySelectorAll("[data-id]"), function (b) {
     b.onclick = function () { showRecord(b.getAttribute("data-id")); };
   });
 }
-function findRec(id) { for (var i = 0; i < R.length; i++) if (R[i].id === id) return i; return -1; }
+function findRec(id) { var a = curRecs(); for (var i = 0; i < a.length; i++) if (a[i].id === id) return i; return -1; }
 function showRecord(id) {
   var i = findRec(id);
   if (i < 0) return;
-  var r = R[i];
+  var r = curRecs()[i], free = r.kind === "free";
   openModal('<h2 style="margin-top:0">No.' + esc(r.no) + '　' + (r.cancel ? "取消" : esc(r.result)) + '</h2>' +
     '<div class="card">' +
     '<div>日時：' + esc(r.t) + '</div><div>作業者：' + esc(r.tanto) + (r.device ? '　端末：' + esc(r.device) : "") + '</div>' +
-    '<div>納品番号：<b>' + esc(r.nohin) + '</b>　品番：<b>' + esc(r.hinban || "-") + '</b>　入数：<b>' + esc(r.qty) + '</b></div>' +
+    (free ? '<div>札の品番：<b>' + esc(r.fudaHin) + '</b></div>' +
+      '<div>社内ラベル：品番 <b>' + esc(r.hinban || "-") + '</b>　納品番号 <b>' + esc(r.nohin) + '</b>　入数 <b>' + esc(r.qty) + '</b></div>' :
+      '<div>納品番号：<b>' + esc(r.nohin) + '</b>　品番：<b>' + esc(r.hinban || "-") + '</b>　入数：<b>' + esc(r.qty) + '</b></div>') +
     (r.warn ? '<div class="errtxt">' + esc(r.warn) + '</div>' : "") +
-    '<div class="muted" style="margin-top:6px">かんばん（読んだ内容）：' + esc(r.kbRaw) + '</div>' +
+    (free ? '<div class="muted" style="margin-top:6px">札（読んだ内容）：' + esc(r.fudaRaw) + '</div>' :
+      '<div class="muted" style="margin-top:6px">かんばん（読んだ内容）：' + esc(r.kbRaw) + '</div>') +
     '<div class="muted">社内ラベル（読んだ内容）：' + esc(r.lbRaw) + '</div>' +
-    '<div class="muted">出荷リスト：' + esc(r.list || "-") + '</div>' +
+    (free ? "" : '<div class="muted">出荷リスト：' + esc(r.list || "-") + '</div>') +
     (r.cancel ? '<div class="muted">取消：' + esc(r.cancelT) + '（' + esc(r.cancel) + '）</div>' : "") +
     '</div>' +
     (r.cancel ? '<button class="btn block" id="ru">取り消しをやめる（元に戻す）</button>' :
@@ -1105,11 +1252,12 @@ function showRecord(id) {
 
 /* ---------------- 画面：記録 ---------------- */
 function renderList() {
-  var n = { ng: 0, warn: 0, cancel: 0 };
-  R.forEach(function (r) { if (r.cancel) n.cancel++; else if (r.result === "NG") n.ng++; else if (r.warn) n.warn++; });
+  var n = { ng: 0, warn: 0, cancel: 0 }, all = curRecs();
+  all.forEach(function (r) { if (r.cancel) n.cancel++; else if (r.result === "NG") n.ng++; else if (r.warn) n.warn++; });
   var chip = function (f, label) { return '<button class="chip' + (listFilter === f ? " sel" : "") + '" data-f="' + f + '">' + label + '</button>'; };
-  return '<h1>記録（' + R.length + '件）</h1>' +
-    '<div class="muted">行をタップすると、くわしい内容を見たり、取り消したりできます。新しい記録が上です。</div>' +
+  return '<h1>' + (isFree() ? "フリー在庫照合の記録" : "記録") + '（' + all.length + '件）</h1>' +
+    '<div class="muted">行をタップすると、くわしい内容を見たり、取り消したりできます。新しい記録が上です。' +
+    (isFree() ? "出荷照合の記録は、読取画面の上で「出荷照合」に切り替えると見られます。" : "") + '</div>' +
     '<div class="chips">' + chip("", "すべて") + (n.ng ? chip("ng", "NG " + n.ng) : "") + (n.warn ? chip("warn", "注意 " + n.warn) : "") +
     (n.cancel ? chip("cancel", "取消 " + n.cancel) : "") + '</div>' +
     '<input id="q" class="input" type="search" placeholder="納品番号・品番でさがす" autocomplete="off" autocapitalize="off" autocorrect="off" style="margin-bottom:10px">' +
@@ -1124,11 +1272,11 @@ function bindList() {
 }
 function drawList() {
   var q = normKey(document.getElementById("q").value);
-  var list = R.filter(function (r) {
+  var list = curRecs().filter(function (r) {
     if (listFilter === "ng" && (r.cancel || r.result !== "NG")) return false;
     if (listFilter === "warn" && (r.cancel || r.result === "NG" || !r.warn)) return false;
     if (listFilter === "cancel" && !r.cancel) return false;
-    if (q && normKey(r.hinban).indexOf(q) < 0 && normKey(r.nohin).indexOf(q) < 0) return false;
+    if (q && normKey(r.hinban).indexOf(q) < 0 && normKey(r.nohin).indexOf(q) < 0 && normKey(r.fudaHin || "").indexOf(q) < 0) return false;
     return true;
   }).reverse();
   var shown = list.slice(0, 300);
@@ -1173,7 +1321,31 @@ function buildProgress() {
     allDone: rows.length > 0 && c.done === rows.length && !outList.length && !hinWarn };
 }
 var ST_NAME = { none: "未", part: "不足", done: "完了", over: "超過" };
+// フリー在庫照合の状況：札の品番ごとに、照合した回数（OK）と NG の数。数は札に手書きなので、ここでは出さない
+function renderFreeProg() {
+  var by = {}, ok = 0, ng = 0, cancel = 0;
+  F.forEach(function (r) {
+    if (r.cancel) { cancel++; return; }
+    var k = normKey(r.fudaHin), x = by[k] || (by[k] = { hin: r.fudaHin, n: 0, ng: 0, last: "" });
+    if (r.result === "NG") { ng++; x.ng++; } else { ok++; x.n++; }
+    if (r.t > x.last) x.last = r.t;
+  });
+  var rows = Object.keys(by).map(function (k) { return by[k]; }).sort(function (a, b) { return a.last < b.last ? 1 : a.last > b.last ? -1 : 0; });
+  return '<h1>フリー在庫照合の状況</h1>' +
+    '<div class="card"><div class="stats">' +
+    '<div class="stat ok"><b>' + ok + '</b><small>OK</small></div>' +
+    '<div class="stat' + (ng ? " ng" : "") + '"><b>' + ng + '</b><small>NG（品番違い）</small></div>' +
+    '<div class="stat"><b>' + cancel + '</b><small>取消</small></div>' +
+    '</div><div class="muted" style="margin-top:8px">この端末の記録だけで数えています。札の品番ごとに、照合した回数と NG の数を出します（在庫の数は札の手書きで見てください）。</div></div>' +
+    (rows.length ? rows.map(function (x) {
+      return '<button class="prog' + (x.ng ? " s-over" : "") + '" data-fh="' + esc(normKey(x.hin)) + '">' +
+        '<div class="top"><span class="nh">' + esc(x.hin) + '</span>' + (x.ng ? '<span class="st">NG ' + x.ng + '</span>' : "") + '</div>' +
+        '<div class="nums"><span>照合 OK <b>' + x.n + '</b> 回</span></div>' +
+        '<div class="meta">最後 ' + esc(x.last) + '</div></button>';
+    }).join("") : '<div class="muted">まだ記録がありません</div>');
+}
 function renderProg() {
+  if (isFree()) return renderFreeProg();
   if (!L) return '<h1>照合状況</h1><div class="banner">出荷リストが入っていません。</div><button id="impL" class="btn primary block">出荷リストを取り込む</button>';
   var p = buildProgress();
   var chip = function (f, label) { return '<button class="chip' + (progFilter === f ? " sel" : "") + '" data-pf="' + f + '">' + label + '</button>'; };
@@ -1229,6 +1401,15 @@ function bindProg() {
   Array.prototype.forEach.call(document.querySelectorAll("[data-nh]"), function (x) {
     x.onclick = function () { showGroupRecords(x.getAttribute("data-nh")); };
   });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-fh]"), function (x) {
+    x.onclick = function () {
+      var key = x.getAttribute("data-fh");
+      var list = F.filter(function (r) { return normKey(r.fudaHin) === key; }).reverse();
+      openModal('<h2 style="margin-top:0">札の品番 ' + esc(list.length ? list[0].fudaHin : key) + ' の記録</h2>' + list.map(recHtml).join("") +
+        '<button class="btn block" id="gc" style="margin-top:12px">閉じる</button>',
+        function (m) { m.querySelector("#gc").onclick = closeModal; bindRecButtons(m); });
+    };
+  });
 }
 function showGroupRecords(key) {
   var list = R.filter(function (r) { return normKey(r.nohin) === key; }).reverse();
@@ -1254,6 +1435,13 @@ function exportRecords() {
     return [r.no, r.t, r.tanto, r.result, r.warn, r.nohin, r.hinban, r.qty, r.kbRaw, r.lbRaw, r.cancel, r.cancelT, r.list, r.device, r.id];
   }));
   shareFile("2点照合記録_" + deviceName() + "_" + stamp() + ".csv", toCsv(rows), "text/csv");
+}
+function exportFreeRecords() {
+  if (!F.length) { alert("フリー在庫照合の記録がありません。"); return; }
+  var rows = [FREE_CSV_HEAD].concat(F.map(function (r) {
+    return [r.no, r.t, r.tanto, r.result, r.warn, r.fudaHin, r.hinban, r.nohin, r.qty, r.fudaRaw, r.lbRaw, r.cancel, r.cancelT, r.device, r.id];
+  }));
+  shareFile("フリー在庫照合記録_" + deviceName() + "_" + stamp() + ".csv", toCsv(rows), "text/csv");
 }
 // 共有シート（AirDrop・メール・「ファイル」に保存）で渡す。使えなければダウンロード
 function shareFile(name, text, type) {
@@ -1559,6 +1747,7 @@ function importRecordsCsv(text) {
   if (!rows.length) return { error: "中身がありません" };
   var h = rows[0].map(function (x) { return x.trim(); });
   var col = function (name) { return h.indexOf(name); };
+  if (col("札の品番") >= 0) return { error: "フリー在庫照合の記録CSVです（出荷照合の記録には入れられません）" };
   if (col("納品番号") < 0 || col("入数") < 0 || col("結果") < 0 || col("ID") < 0) return { error: "2点照合の記録CSVではありません" };
   var have = {}, added = 0, skipped = 0;
   R.forEach(function (r) { have[r.id] = r; });
@@ -1632,6 +1821,10 @@ function renderSet() {
     '<button id="clr" class="btn danger block">記録と出荷リストを全部消す（新しい出荷）</button>' +
     '<div class="muted" style="margin-top:10px">記録はこの端末の中にだけ保存されます（ネットには送りません）。記録 ' + R.length + ' 件。</div>' +
     '</div>' +
+    '<div class="card"><h2 style="margin-top:0">フリー在庫照合</h2>' +
+    '<div class="muted" style="margin-bottom:8px">フリー在庫札（QR＝品番）と社内ラベルの品番を比べた記録です。出荷照合の記録とは別に保存しています。記録 ' + F.length + ' 件。</div>' +
+    '<button id="expFree" class="btn primary block" style="margin-bottom:10px">フリー在庫照合の記録をCSVで書き出す</button>' +
+    '<button id="clrFree" class="btn danger block">フリー在庫照合の記録を消す</button></div>' +
     '<div class="muted" style="text-align:center">2点照合ツール 版 ' + APP_VERSION + '</div>';
 }
 function kbMemo(mode) {
@@ -1678,6 +1871,14 @@ function bindSet() {
     openManual("かんばんを手で入れて試す", "読み取りと同じように確かめます（記録はしません）。", function (v) { kbtRaw = v; kbTest(); });
   };
   document.getElementById("expRec").onclick = exportRecords;
+  document.getElementById("expFree").onclick = exportFreeRecords;
+  document.getElementById("clrFree").onclick = function () {
+    if (!F.length) { alert("フリー在庫照合の記録はありません。"); return; }
+    if (!confirm("フリー在庫照合の記録 " + F.length + " 件を消します。\n先に「フリー在庫照合の記録をCSVで書き出す」をしましたか？")) return;
+    if (!confirm("本当に消してよいですか？（元に戻せません）")) return;
+    F = []; S.fseq = 0; S.fpend = null; lastResult = null; saveAll(); render();
+    alert("フリー在庫照合の記録を消しました。");
+  };
   document.getElementById("impRec").onclick = function () {
     pickFile(".csv,text/csv,text/comma-separated-values", function (f) {
       readTextFile(f, function (text) {
